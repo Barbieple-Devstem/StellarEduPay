@@ -226,11 +226,19 @@ if (process.env.NODE_ENV === 'production' && !APP_URL) {
   );
 }
 if (APP_URL) {
+  let parsedAppUrl;
   try {
-    new URL(APP_URL);
+    parsedAppUrl = new URL(APP_URL);
   } catch (err) {
     throw new Error(
       `[Config] APP_URL must be a valid absolute URL. Got: ${APP_URL}`
+    );
+  }
+  // Issue #1542: APP_URL is embedded in parent-facing emails (unsubscribe
+  // links, RFC 8058 List-Unsubscribe headers) and must be HTTPS in production.
+  if (process.env.NODE_ENV === 'production' && parsedAppUrl.protocol !== 'https:') {
+    throw new Error(
+      `[Config] APP_URL must use https:// in production. Got: ${APP_URL}`
     );
   }
 }
