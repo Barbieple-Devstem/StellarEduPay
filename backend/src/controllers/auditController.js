@@ -1,6 +1,7 @@
 'use strict';
 
 const { getAuditLogs, getRecentAuditLogs, verifyAuditChain, exportAuditLogs } = require('../services/auditService');
+const { csvEscape } = require('../utils/csv');
 
 /**
  * GET /api/audit-logs
@@ -108,19 +109,9 @@ async function exportAuditLogsEndpoint(req, res, next) {
       'performedBy', 'result', 'errorMessage', 'ipAddress', 'createdAt',
     ];
 
-    function escapeCsv(value) {
-      if (value == null) return '';
-      const str = String(value);
-      // Wrap in double-quotes if value contains a comma, newline, or double-quote
-      if (str.includes(',') || str.includes('\n') || str.includes('"')) {
-        return `"${str.replace(/"/g, '""')}"`;
-      }
-      return str;
-    }
-
     const header = CSV_COLUMNS.join(',');
     const rows = logs.map((log) =>
-      CSV_COLUMNS.map((col) => escapeCsv(log[col])).join(',')
+      CSV_COLUMNS.map((col) => csvEscape(log[col])).join(',')
     );
     const csv = [header, ...rows].join('\r\n');
 

@@ -61,6 +61,11 @@ spec:
                   key: MONGO_URI
             - name: REDIS_HOST
               value: "redis"
+            - name: APP_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: stellaredupay
+                  key: APP_URL
           readinessProbe:
             httpGet:
               path: /health

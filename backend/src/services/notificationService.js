@@ -104,8 +104,16 @@ function buildReminderEmail({ studentName, studentId, className, feeAmount, rema
  */
 async function sendFeeReminder(opts) {
   const token = generateUnsubscribeToken(opts.studentId, opts.schoolId || 'unknown', config.JWT_SECRET);
-  const baseUrl = config.APP_URL || 'http://localhost:5000';
-  const unsubscribeUrl = `${baseUrl}/api/reminders/unsubscribe?token=${encodeURIComponent(token)}`;
+  // APP_URL is required (HTTPS) in production — see config/index.js.
+  const baseUrl = (config.APP_URL || 'http://localhost:3000').replace(/\/+$/, '');
+  const encodedToken = encodeURIComponent(token);
+  // Issue #1542: the in-body link opens the frontend /unsubscribe page, which
+  // asks for confirmation (and offers undo) before POSTing the opt-out, so
+  // link pre-fetching by email security scanners changes nothing.
+  const unsubscribeUrl = `${baseUrl}/unsubscribe?token=${encodedToken}`;
+  // RFC 8058 one-click endpoint — mailbox providers POST
+  // "List-Unsubscribe=One-Click" to this URL.
+  const oneClickUrl = `${baseUrl}/api/reminders/unsubscribe?token=${encodedToken}`;
 
   let school = null;
   if (opts.schoolId) {
@@ -130,6 +138,10 @@ async function sendFeeReminder(opts) {
     text,
     html,
     category: 'reminder',
+    headers: {
+      'List-Unsubscribe': `<${oneClickUrl}>`,
+      'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+    },
   });
 
   // The console (dev/no-provider) backend logs instead of delivering — preserve
