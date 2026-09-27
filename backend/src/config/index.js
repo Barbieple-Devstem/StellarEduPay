@@ -193,6 +193,23 @@ const SMTP_FROM = process.env.SMTP_FROM || "noreply@stellaredupay.com";
 // Email provider inbound webhook secret
 const EMAIL_PROVIDER_WEBHOOK_SECRET = process.env.EMAIL_PROVIDER_WEBHOOK_SECRET || null;
 
+// Email bounce/complaint webhook authentication (Issue #1537).
+//   EMAIL_WEBHOOK_SECRET               — shared secret, accepted ONLY via the
+//                                        X-Webhook-Token header.
+//   EMAIL_SNS_TOPIC_ARNS               — comma-separated SNS topic ARNs allowed
+//                                        to deliver SES notifications.
+//   EMAIL_SENDGRID_WEBHOOK_PUBLIC_KEY  — SendGrid Signed Event Webhook
+//                                        verification key (base64 DER / PEM).
+const EMAIL_WEBHOOK_SECRET = process.env.EMAIL_WEBHOOK_SECRET || null;
+const EMAIL_SNS_TOPIC_ARNS = (process.env.EMAIL_SNS_TOPIC_ARNS || '')
+  .split(',').map((s) => s.trim()).filter(Boolean);
+const EMAIL_SENDGRID_WEBHOOK_PUBLIC_KEY = process.env.EMAIL_SENDGRID_WEBHOOK_PUBLIC_KEY || null;
+
+// Webhook V1 signature sunset (Issue #1539). After this date (YYYY-MM-DD,
+// inclusive, UTC) V1 signatures are never emitted. Validated at startup.
+const WEBHOOK_V1_SUNSET = process.env.WEBHOOK_V1_SUNSET || '2027-02-28';
+require('../utils/webhookSignaturePolicy').parseV1Sunset(WEBHOOK_V1_SUNSET);
+
 // Pluggable email provider (Issue #80): smtp | ses | sendgrid | console.
 // When unset the email module auto-selects smtp (if SMTP_* configured) else console.
 const EMAIL_PROVIDER = process.env.EMAIL_PROVIDER || null;
@@ -249,6 +266,10 @@ const RECONCILIATION_INTERVAL_MS = parseInt(
 // ── Freeze to prevent accidental mutation at runtime ─────────────────────────
 const config = Object.freeze({
   EMAIL_PROVIDER_WEBHOOK_SECRET,
+  EMAIL_WEBHOOK_SECRET,
+  EMAIL_SNS_TOPIC_ARNS,
+  EMAIL_SENDGRID_WEBHOOK_PUBLIC_KEY,
+  WEBHOOK_V1_SUNSET,
   PORT,
   MONGO_URI,
   RECEIPT_SIGNATURE_SECRET,

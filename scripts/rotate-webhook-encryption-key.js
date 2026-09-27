@@ -10,8 +10,9 @@
  * Rotation relies on the dual-key grace period built into decryptWebhookSecret():
  * set WEBHOOK_SECRET_ENCRYPTION_KEY_PREVIOUS to the key currently protecting
  * stored secrets and WEBHOOK_SECRET_ENCRYPTION_KEY to the new key, then run this
- * script. It decrypts each School.webhookSecret (falling back to the previous
- * key automatically) and re-encrypts it under the new key.
+ * script. It decrypts each School.webhookSecret and each WebhookEndpoint
+ * secret / previousSecret (#1538), falling back to the previous key
+ * automatically, and re-encrypts them under the new key.
  *
  * Defaults to a dry run (decrypts and re-encrypts in memory for every School
  * with a webhookSecret, without writing anything) so a bad key pair is caught
@@ -54,6 +55,37 @@ async function rotateAll(School, { apply }) {
   return results;
 }
 
+/**
+ * Re-encrypt every WebhookEndpoint.secret / previousSecret (#1538).
+ *
+ * @param {{find: Function, updateOne: Function}} WebhookEndpoint  Mongoose model
+ *   (or a test double exposing the same two calls).
+ * @param {{apply: boolean}} opts
+ * @returns {Promise<Array<{endpointId: any, status: 'ok'|'error', error?: string}>>}
+ */
+async function rotateAllEndpoints(WebhookEndpoint, { apply }) {
+  const endpoints = await WebhookEndpoint.find({ secret: { $exists: true, $ne: null } })
+    .select('_id +secret +previousSecret')
+    .lean();
+
+  const results = [];
+  for (const ep of endpoints) {
+    try {
+      const $set = { secret: encryptWebhookSecret(decryptWebhookSecret(ep.secret)) };
+      if (ep.previousSecret) {
+        $set.previousSecret = encryptWebhookSecret(decryptWebhookSecret(ep.previousSecret));
+      }
+      if (apply) {
+        await WebhookEndpoint.updateOne({ _id: ep._id }, { $set });
+      }
+      results.push({ endpointId: ep._id, status: 'ok' });
+    } catch (err) {
+      results.push({ endpointId: ep._id, status: 'error', error: err.message });
+    }
+  }
+  return results;
+}
+
 function validateEnv() {
   const previousKey = process.env.WEBHOOK_SECRET_ENCRYPTION_KEY_OLD || process.env.WEBHOOK_SECRET_ENCRYPTION_KEY_PREVIOUS;
   const newKey = process.env.WEBHOOK_SECRET_ENCRYPTION_KEY;
@@ -69,8 +101,12 @@ async function main() {
   await mongoose.connect(process.env.MONGO_URI);
   const School = require('../backend/src/models/schoolModel');
 
+  const WebhookEndpoint = require('../backend/src/models/webhookEndpointModel');
+
   const results = await rotateAll(School, { apply });
+  const endpointResults = await rotateAllEndpoints(WebhookEndpoint, { apply });
   const failed = results.filter((r) => r.status === 'error');
+  const failedEndpoints = endpointResults.filter((r) => r.status === 'error');
 
   console.log(`${results.length} school(s) with a stored webhook secret found.`);
   results
@@ -89,9 +125,19 @@ async function main() {
     failed.forEach((f) => console.error(`  - Failed to rotate webhook secret for school: ${f.schoolId}: ${f.error}`));
   }
 
+  console.log(
+    `${endpointResults.length} webhook endpoint(s) found; ` +
+      `${endpointResults.length - failedEndpoints.length} re-encrypted successfully` +
+      (apply ? '.' : ' (dry run — no writes made).')
+  );
+  if (failedEndpoints.length > 0) {
+    console.error(`${failedEndpoints.length} endpoint(s) failed:`);
+    failedEndpoints.forEach((f) => console.error(`  - Failed to rotate secret for webhook endpoint: ${f.endpointId}: ${f.error}`));
+  }
+
   await mongoose.disconnect();
 
-  if (failed.length > 0) process.exit(1);
+  if (failed.length > 0 || failedEndpoints.length > 0) process.exit(1);
 
   if (apply) {
     console.log('\nNext steps (see docs/security.md):');
@@ -108,4 +154,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { rotateAll, validateEnv };
+module.exports = { rotateAll, rotateAllEndpoints, validateEnv };

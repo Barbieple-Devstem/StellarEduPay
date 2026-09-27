@@ -10,10 +10,15 @@ const { v4: uuidv4 } = require('uuid');
 const School = require('../models/schoolModel');
 const WebhookRetry = require('../models/webhookRetryModel');
 const WebhookEndpoint = require('../models/webhookEndpointModel');
+const { decryptLeanEndpoint } = require('../models/webhookEndpointModel');
 const WebhookDelivery = require('../models/webhookDeliveryModel');
 const { validateWebhookUrl, validateResolvedIp } = require('../utils/validateWebhookUrl');
 const { resolveDnsWithCache } = require('../utils/dnsCache');
 const { buildWebhookPayload } = require('../utils/buildWebhookPayload');
+const {
+  resolveSignatureVersions,
+  signatureVersionLabel,
+} = require('../utils/webhookSignaturePolicy');
 const logger = require('../utils/logger').child('WebhookService');
 
 const WEBHOOK_TIMEOUT_MS = 10_000;
@@ -244,6 +249,62 @@ async function _writeDeliveryLog({
   }
 }
 
+// ── Signing context — Issues #1538 / #1539 ───────────────────────────────────
+
+/**
+ * Return the endpoint's previous secret if its rotation overlap window is
+ * still open, otherwise null.
+ *
+ * @param {object} ep  WebhookEndpoint (document or decrypted lean object)
+ * @param {Date} [now]
+ * @returns {string|null}
+ */
+function _activePreviousSecret(ep, now = new Date()) {
+  if (!ep || !ep.previousSecret || !ep.previousSecretExpiresAt) return null;
+  return new Date(ep.previousSecretExpiresAt).getTime() > now.getTime() ? ep.previousSecret : null;
+}
+
+/**
+ * Resolve the secret(s) and signature versions for a delivery at send time.
+ *
+ *   - endpointId → the WebhookEndpoint's (decrypted) secret, overlap secret and
+ *                  signatureVersions
+ *   - otherwise  → the School's legacy webhookSecret with the legacy
+ *                  ['v1','v2'] signature set
+ *
+ * Falls back to the explicitly passed secret when nothing can be loaded.
+ *
+ * @param {object} opts
+ * @param {string|null} opts.endpointId
+ * @param {string|null} opts.schoolId
+ * @param {string|null} opts.secret
+ * @returns {Promise<{secret: string|null, previousSecret: string|null, signatureVersions: string[]|null}>}
+ */
+async function _resolveSigningContext({ endpointId = null, schoolId = null, secret = null }) {
+  try {
+    if (endpointId) {
+      const ep = decryptLeanEndpoint(
+        await WebhookEndpoint.findById(endpointId).select('+secret +previousSecret').lean()
+      );
+      if (ep) {
+        return {
+          secret: ep.secret || secret || null,
+          previousSecret: _activePreviousSecret(ep),
+          signatureVersions: ep.signatureVersions || null,
+        };
+      }
+    } else if (!secret && schoolId) {
+      const school = await School.findOne({ schoolId }).select('webhookSecret');
+      if (school?.webhookSecret) {
+        return { secret: school.webhookSecret, previousSecret: null, signatureVersions: null };
+      }
+    }
+  } catch (err) {
+    logger.warn('Failed to resolve webhook signing context', { endpointId, schoolId, error: err.message });
+  }
+  return { secret: secret || null, previousSecret: null, signatureVersions: null };
+}
+
 // ── Core delivery function ────────────────────────────────────────────────────
 /**
  * Fire a single webhook delivery to one URL.
@@ -258,6 +319,11 @@ async function _writeDeliveryLog({
  * @param {object}  opts.filteredPayload   PII-filtered payload (from buildWebhookPayload)
  * @param {object}  opts.rawPayload        Original payload for retry queue storage
  * @param {string|null} opts.secret
+ * @param {string|null} [opts.previousSecret]  Secret replaced by a rotation; while
+ *                                     still inside its overlap window the delivery
+ *                                     is additionally signed with it (#1538)
+ * @param {string[]|null} [opts.signatureVersions]  Endpoint's signature versions
+ *                                     (#1539). null → legacy ['v1','v2'].
  * @param {string}  opts.deliveryId
  * @param {string|null} opts.endpointId    ObjectId string of WebhookEndpoint (null for legacy)
  * @param {string|null} opts.schoolId
@@ -267,6 +333,7 @@ async function _writeDeliveryLog({
 async function _sendToUrl({
   url, event, filteredPayload, rawPayload, secret, deliveryId,
   endpointId = null, schoolId = null, attemptCount = 1,
+  previousSecret = null, signatureVersions = null,
 }) {
   const correlationId = rawPayload?.correlationId || null;
 
@@ -304,13 +371,28 @@ async function _sendToUrl({
     'X-StellarEduPay-Delivery-ID': deliveryId,
   };
   if (correlationId) headers['X-StellarEduPay-Correlation-Id'] = correlationId;
+  // #1539: which signature headers to emit is decided per endpoint and by the
+  // WEBHOOK_V1_SUNSET date — see utils/webhookSignaturePolicy.js.
+  const versions = resolveSignatureVersions(signatureVersions);
+  const sigLabel = signatureVersionLabel(versions, Boolean(secret));
   if (secret) {
-    // V1 — kept for backward compatibility during the migration window.
-    // Signs JSON.stringify(body) only; timestamp and deliveryId are NOT covered.
-    headers['X-StellarEduPay-Signature'] = `sha256=${generateSignature(body, secret)}`;
-    // V2 — signs `timestamp.deliveryId.rawBody` so the timestamp and delivery-ID
-    // are bound to the signature and cannot be rewritten by an attacker.
-    headers['X-StellarEduPay-Signature-V2'] = `sha256=${generateSignatureV2(timestamp, deliveryId, rawBody, secret)}`;
+    if (versions.includes('v1')) {
+      // V1 — deprecated, emitted only for endpoints that still opt in and only
+      // until the sunset date. Signs JSON.stringify(body) only; timestamp and
+      // deliveryId are NOT covered. Computed over rawBody so it always matches
+      // the transmitted bytes.
+      headers['X-StellarEduPay-Signature'] = `sha256=${crypto.createHmac('sha256', secret).update(rawBody).digest('hex')}`;
+    }
+    if (versions.includes('v2')) {
+      // V2 — signs `timestamp.deliveryId.rawBody` so the timestamp and delivery-ID
+      // are bound to the signature and cannot be rewritten by an attacker.
+      headers['X-StellarEduPay-Signature-V2'] = `sha256=${generateSignatureV2(timestamp, deliveryId, rawBody, secret)}`;
+      // #1538: during a secret-rotation overlap window, also sign with the
+      // previous secret so receivers can switch over without dropping events.
+      if (previousSecret) {
+        headers['X-StellarEduPay-Signature-V2-Previous'] = `sha256=${generateSignatureV2(timestamp, deliveryId, rawBody, previousSecret)}`;
+      }
+    }
   }
 
   // Generic tracing header (#978); the vendor-specific correlation + signature
@@ -335,7 +417,7 @@ async function _sendToUrl({
     // #868: record success metric
     try {
       const { recordDeliverySuccess } = require('../metrics/webhookMetrics');
-      recordDeliverySuccess(event, durationMs);
+      recordDeliverySuccess(event, durationMs, sigLabel);
     } catch (_) {}
 
     if (endpointId) {
@@ -381,7 +463,7 @@ async function _sendToUrl({
     // #868: record failure metric
     try {
       const { recordDeliveryFailure } = require('../metrics/webhookMetrics');
-      recordDeliveryFailure(event, durationMs, false, schoolId);
+      recordDeliveryFailure(event, durationMs, false, schoolId, sigLabel);
     } catch (_) {}
 
     if (endpointId) {
@@ -419,11 +501,13 @@ async function fireWebhookToEndpoints(schoolId, event, rawPayload, allowedFields
   const filteredPayload = buildWebhookPayload(rawPayload, allowedFields);
 
   // #865: query active endpoints subscribed to this event
-  const endpoints = await WebhookEndpoint.find({
+  // #1538: secrets are select:false and encrypted at rest — opt in explicitly
+  // and decrypt (lean() skips the model's post('init') decryption hook).
+  const endpoints = (await WebhookEndpoint.find({
     schoolId,
     isActive: true,
     subscribedEvents: event,
-  }).lean();
+  }).select('+secret +previousSecret').lean()).map(decryptLeanEndpoint);
 
   if (endpoints.length === 0) return [];
 
@@ -461,6 +545,8 @@ async function fireWebhookToEndpoints(schoolId, event, rawPayload, allowedFields
       filteredPayload,
       rawPayload,
       secret: ep.secret,
+      previousSecret: _activePreviousSecret(ep),
+      signatureVersions: ep.signatureVersions,
       deliveryId,
       endpointId: ep._id,
       schoolId,
@@ -496,9 +582,13 @@ async function fireWebhookToEndpoints(schoolId, event, rawPayload, allowedFields
  * @param {string|null} deliveryId
  * @param {string|null} endpointId  ObjectId string if known (for delivery log)
  * @param {string|null} schoolId
+ * @param {object} [signing]           Optional signing options (#1538, #1539)
+ * @param {string|null} [signing.previousSecret]
+ * @param {string[]|null} [signing.signatureVersions]
+ *   When omitted and endpointId is given, both are loaded from the endpoint.
  * @returns {Promise<{success, statusCode?, error?, queued?, deliveryId}>}
  */
-async function fireWebhook(url, event, payload, secret = null, deliveryId = null, endpointId = null, schoolId = null) {
+async function fireWebhook(url, event, payload, secret = null, deliveryId = null, endpointId = null, schoolId = null, signing = null) {
   const correlationId = payload?.correlationId || null;
 
   if (!url) return { success: false, error: 'No webhook URL configured', deliveryId: null };
@@ -518,11 +608,18 @@ async function fireWebhook(url, event, payload, secret = null, deliveryId = null
     return { success: false, error: 'Replay detected: delivery already processed', deliveryId: id };
   }
 
+  const signingCtx = signing || (endpointId
+    ? await _resolveSigningContext({ endpointId, schoolId, secret })
+    : { secret, previousSecret: null, signatureVersions: null });
+
   const result = await _sendToUrl({
     url, event,
     filteredPayload: payload,
     rawPayload: payload,
-    secret, deliveryId: id,
+    secret: signing ? secret : signingCtx.secret,
+    previousSecret: signingCtx.previousSecret || null,
+    signatureVersions: signingCtx.signatureVersions || null,
+    deliveryId: id,
     endpointId, schoolId, attemptCount: 1,
   });
 
@@ -646,12 +743,22 @@ async function retryWebhook(retry) {
 
   const attemptNumber = retry.attemptCount + 1;
 
+  // The signing secret is never persisted on WebhookRetry (Issue #75) — resolve
+  // it (and the endpoint's signature versions, #1539) at send time.
+  const signingCtx = await _resolveSigningContext({
+    endpointId: retry.endpointId || null,
+    schoolId: retry.schoolId || null,
+    secret: retry.secret || null,
+  });
+
   const result = await _sendToUrl({
     url: retry.url,
     event: retry.event,
     filteredPayload: retry.payload,
     rawPayload: retry.payload,
-    secret: retry.secret,
+    secret: signingCtx.secret,
+    previousSecret: signingCtx.previousSecret,
+    signatureVersions: signingCtx.signatureVersions,
     deliveryId: retry.deliveryId,
     endpointId: retry.endpointId || null,
     schoolId: retry.schoolId || null,
@@ -692,7 +799,10 @@ async function retryWebhook(retry) {
     // #868: increment dead-letter metric
     try {
       const { recordDeliveryFailure } = require('../metrics/webhookMetrics');
-      recordDeliveryFailure(retry.event, 0, true, retry.schoolId || 'unknown');
+      recordDeliveryFailure(
+        retry.event, 0, true, retry.schoolId || 'unknown',
+        signatureVersionLabel(resolveSignatureVersions(signingCtx.signatureVersions), Boolean(signingCtx.secret)),
+      );
       // Refresh gauge asynchronously
       const { refreshDeadLetterGauge } = require('../metrics/webhookMetrics');
       refreshDeadLetterGauge().catch(() => {});

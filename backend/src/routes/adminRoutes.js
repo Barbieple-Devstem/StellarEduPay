@@ -3,7 +3,14 @@
 const express = require('express');
 const router = express.Router();
 const { setLogLevel } = require('../controllers/adminController');
-const { listDLQ, retryDLQEntry, replayWebhook } = require('../controllers/webhookAdminController');
+const {
+  listDLQ,
+  retryDLQEntry,
+  replayWebhook,
+  listV1Endpoints,
+  notifyV1Endpoints,
+} = require('../controllers/webhookAdminController');
+const { healthDetails } = require('../controllers/healthController');
 const {
   getBacklog,
   listDeadLetterVerifications,
@@ -38,8 +45,16 @@ router.post('/log-level', requireAdminAuth, auditContext, setLogLevel);
 // Webhook dead-letter queue admin endpoints
 router.get('/webhooks/dlq', requireAdminAuth, listDLQ);
 router.post('/webhooks/dlq/:id/retry', requireAdminAuth, auditContext, retryDLQEntry);
+// Webhook V1 signature sunset report + advance notice (Issue #1539).
+// Registered before /webhooks/:id/replay so "v1-endpoints" is never read as an :id.
+router.get('/webhooks/v1-endpoints', requireAdminAuth, listV1Endpoints);
+router.post('/webhooks/v1-endpoints/notify', requireAdminAuth, auditContext, notifyV1Endpoints);
 // Manual replay — accepts any delivery status (Issue #73)
 router.post('/webhooks/:id/replay', requireAdminAuth, auditContext, replayWebhook);
+
+// Detailed health diagnostics (Issue #1540) — the public /health returns only
+// { status }; hostnames, endpoints, counters and error reasons live here.
+router.get('/health/details', requireAdminAuth, healthDetails);
 
 // Stellar verification retry backlog / dead-letter admin endpoints
 router.get('/pending-verifications/backlog', requireAdminAuth, getBacklog);

@@ -1127,7 +1127,27 @@ X-School-ID: SCH-3F2A
 ```
 GET /health
 ```
-Simple liveness probe. No auth or school context required.
+Public status probe. No auth or school context required. Returns only the
+overall status (Issue #1540) — no hostnames, URLs, error strings or internal
+counters.
+
+**Response `200`** (`healthy` or `degraded`) / **`503`** (`unhealthy`)
+```json
+{ "status": "healthy" }
+```
+
+### Detailed health diagnostics — admin only
+
+```
+GET /api/admin/health/details
+Authorization: Bearer <token>
+```
+
+Same HTTP status code as `/health`, with the full diagnostic body. Dependency
+failures are reported as stable reason codes (`DNS_RESOLUTION_FAILED`,
+`CONNECTION_REFUSED`, `CONNECTION_RESET`, `TIMEOUT`, `CIRCUIT_OPEN`,
+`AUTH_FAILED`, `NOT_CONNECTED`, `UNAVAILABLE`); raw error messages are only
+written to the server log.
 
 **Response `200`**
 ```json

@@ -65,9 +65,26 @@ POST /api/email/webhooks/ses        (SES → SNS notifications)
 POST /api/email/webhooks/sendgrid   (SendGrid Event Webhook)
 ```
 
-Protect them with a shared secret: set `EMAIL_WEBHOOK_SECRET` and configure the
-provider to send it as `x-webhook-token` (or `?token=`). Without the secret set,
-webhooks are accepted unauthenticated (dev only — always set it in production).
+These routes write to the suppression list (which permanently stops emails to
+a parent), so they are authenticated per provider (Issue #1537):
+
+| Provider | Authentication | Configuration |
+|----------|----------------|---------------|
+| `ses` | Amazon SNS message signature is verified (`SigningCertURL` must be on `sns.<region>.amazonaws.com`) and `TopicArn` must be allow-listed. `SubscriptionConfirmation` messages are confirmed automatically after verification. | `EMAIL_SNS_TOPIC_ARNS` — comma-separated topic ARNs |
+| `sendgrid` | SendGrid [Signed Event Webhook](https://docs.sendgrid.com/for-developers/tracking-events/getting-started-event-webhook-security-features) (ECDSA) signature, or — if no key is configured — the shared secret | `EMAIL_SENDGRID_WEBHOOK_PUBLIC_KEY` (preferred) or `EMAIL_WEBHOOK_SECRET` |
+
+- The shared secret `EMAIL_WEBHOOK_SECRET` is accepted **only** via the
+  `X-Webhook-Token` header and compared in constant time. A `?token=` query
+  parameter is rejected with `400` so secrets never appear in access or proxy
+  logs.
+- In **production**, unsigned or unauthenticated calls are always rejected. If
+  none of `EMAIL_SNS_TOPIC_ARNS`, `EMAIL_SENDGRID_WEBHOOK_PUBLIC_KEY` or
+  `EMAIL_WEBHOOK_SECRET` is set, the backend logs an error at startup and the
+  route answers `503 EMAIL_WEBHOOK_NOT_CONFIGURED`.
+- Outside production with nothing configured, calls are accepted with a
+  warning (local development only).
+- Rejected calls are logged (never stored) and counted in the
+  `email_webhook_rejections_total{provider, reason}` metric.
 
 ### Operator endpoints (admin auth)
 

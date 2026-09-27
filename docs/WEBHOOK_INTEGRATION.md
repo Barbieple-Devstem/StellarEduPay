@@ -58,7 +58,8 @@ Every delivery is signed with HMAC-SHA256 using your school's secret. Always ver
 | Header | Example | Purpose |
 |--------|---------|---------|
 | `X-StellarEduPay-Signature-V2` | `sha256=a1b2c3...` | **V2 HMAC-SHA256** covering timestamp, delivery-ID, and body (recommended) |
-| `X-StellarEduPay-Signature` | `sha256=d4e5f6...` | V1 HMAC-SHA256 of the JSON body only (deprecated — use V2) |
+| `X-StellarEduPay-Signature` | `sha256=d4e5f6...` | V1 HMAC-SHA256 of the JSON body only (deprecated — only sent to endpoints whose `signatureVersions` include `v1`, and never after `WEBHOOK_V1_SUNSET`) |
+| `X-StellarEduPay-Signature-V2-Previous` | `sha256=0a1b2c...` | V2 signature computed with your **previous** secret — only sent during a secret-rotation overlap window (see [Rotating your signing secret](#rotating-your-signing-secret)) |
 | `X-StellarEduPay-Timestamp` | `1711532400` | Unix timestamp (seconds) of delivery |
 | `X-StellarEduPay-Delivery-ID` | `550e8400-...` | Unique delivery UUID for idempotency |
 
@@ -209,6 +210,55 @@ public class WebhookVerifier {
 
 ---
 
+## Signing secrets
+
+- If you omit `secret` when creating an endpoint (`POST /api/webhook-endpoints`),
+  a 256-bit secret is generated for you and returned **once** in the response.
+- A caller-supplied `secret` must be at least 32 characters, contain no
+  whitespace and be random — weak or repetitive values (e.g. `"a"`,
+  `"aaaa…"`) are rejected with `400 WEAK_WEBHOOK_SECRET`.
+- Secrets are encrypted at rest and are never returned by `GET` endpoints.
+
+### Rotating your signing secret
+
+```
+POST /api/webhook-endpoints/:id/rotate-secret
+{ "overlapSeconds": 86400 }        # optional; default 24h, max 7 days, 0 = no overlap
+```
+
+The response contains the new `secret` (shown only once) and
+`previousSecretExpiresAt`. Until that time every delivery carries both
+`X-StellarEduPay-Signature-V2` (new secret) and
+`X-StellarEduPay-Signature-V2-Previous` (old secret), so you can deploy the new
+secret without dropping events: accept a delivery if **either** header
+verifies against the secret your receiver currently holds.
+
+`PUT /api/webhook-endpoints/:id` with a `secret` replaces it immediately with
+no overlap.
+
+---
+
+## Choosing signature versions
+
+Each endpoint has a `signatureVersions` setting:
+
+| Value | Headers sent |
+|-------|--------------|
+| `["v2"]` | V2 only — **default for endpoints created from now on** |
+| `["v1", "v2"]` | V1 and V2 — the setting existing endpoints were migrated to |
+
+Opt out of V1 as soon as your receiver verifies V2:
+
+```
+PUT /api/webhook-endpoints/:id
+{ "signatureVersions": ["v2"] }
+```
+
+`v2` is always required. Regardless of this setting, V1 is never sent after
+the `WEBHOOK_V1_SUNSET` date (default **2027-02-28**).
+
+---
+
 ## V1 Signature algorithm (deprecated)
 
 > **V1 is deprecated.** It signs only the JSON body, leaving the timestamp and
@@ -216,9 +266,9 @@ public class WebhookVerifier {
 > a rewritten `X-StellarEduPay-Timestamp` header, bypassing the tolerance check.
 > Migrate to V2 before the V1 removal date (see [Migration guide](#migration-guide-v1--v2) below).
 
-The V1 signature is included on every delivery during the transition window so
-existing integrators are not immediately broken. It will be removed in a future
-release.
+The V1 signature is only sent to endpoints whose `signatureVersions` include
+`v1` (endpoints that existed before V1 became opt-in), and never after the
+V1 sunset date.
 
 ```
 signature_v1 = HMAC-SHA256(secret, JSON.stringify(body))
@@ -244,13 +294,23 @@ during the migration window to give you time to update your receiver.
    staging/pre-production.
 4. Remove your V1 verification path.
 
-**V1 removal date:** V1 signatures will be dropped after **2027-02-28**.
-You will receive advance notice via the developer changelog and email.
+5. Opt out of V1: `PUT /api/webhook-endpoints/:id` with
+   `{ "signatureVersions": ["v2"] }`.
 
-> **Dual-signature transition period:** between now and the V1 removal date,
-> every delivery carries both `X-StellarEduPay-Signature` (V1) and
-> `X-StellarEduPay-Signature-V2`. Once you have migrated, verify only V2 and
-> ignore V1.
+**V1 removal date:** V1 signatures will be dropped after **2027-02-28**
+(configured server-side as `WEBHOOK_V1_SUNSET`; no code change is needed to
+remove V1). You will receive advance notice via the developer changelog and
+email — operators list the endpoints still on V1 with
+`GET /api/admin/webhooks/v1-endpoints` and email their owners with
+`POST /api/admin/webhooks/v1-endpoints/notify`. The
+`webhook_deliveries_total{signature_version}` metric shows how many deliveries
+still carry V1.
+
+> **Dual-signature transition period:** until you opt out (or the V1 removal
+> date passes), deliveries to existing endpoints carry both
+> `X-StellarEduPay-Signature` (V1) and `X-StellarEduPay-Signature-V2`. Once you
+> have migrated, verify only V2 and ignore V1. Endpoints created from now on
+> receive V2 only.
 
 ---
 

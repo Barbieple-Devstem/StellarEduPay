@@ -7,6 +7,8 @@ data:
   REDIS_HOST: "redis"
   REDIS_PORT: "6379"
   NODE_ENV: "production"
+  # Date after which the deprecated V1 webhook signature is never sent (#1539).
+  WEBHOOK_V1_SUNSET: "2027-02-28"
   # Used by the Next.js server to proxy /api/* requests server-side to the
   # backend pod (SSR and Next.js rewrites). Not exposed to the browser.
   BACKEND_PROXY_TARGET: "http://backend:5000"

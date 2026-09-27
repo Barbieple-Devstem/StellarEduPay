@@ -37,7 +37,8 @@ closed; anything best-effort (SSE) degrades to local.**
 
 ## Health reporting
 
-`GET /health` reports Redis status under `checks.retryQueue`:
+`GET /api/admin/health/details` (admin auth — the public `/health` returns only
+`{ status }`, Issue #1540) reports Redis status under `checks.retryQueue`:
 
 ```json
 "retryQueue": {
@@ -46,7 +47,8 @@ closed; anything best-effort (SSE) degrades to local.**
   "redisConfigured": true,
   "redisStatus": "ready",
   "redisHost": "...",
-  "lastUpdatedAt": "..."
+  "lastUpdatedAt": "...",
+  "reason": "CONNECTION_REFUSED"
 }
 ```
 
