@@ -5,6 +5,8 @@ const FeeStructure = require('../models/feeStructureModel');
 const { get, set, del, KEYS, TTL } = require('../cache');
 const csv = require('csv-parser');
 const { Readable } = require('stream');
+const { csvEscape } = require('../utils/csv');
+const { normaliseName, nameError, NAME_MAX_LENGTH, CLASS_MAX_LENGTH } = require('../middleware/validate');
 const { logAudit } = require('../services/auditService');
 const { encryptStudentPii, decryptStudentPii, hashParentEmail } = require('../services/studentPiiEncryption');
 
@@ -584,16 +586,13 @@ function validateStudentRow(row) {
     fieldErrors.push({ field: 'studentId', error: 'studentId must be 3–20 alphanumeric characters (letters, digits, _ or -)' });
   }
 
-  // name: required, non-empty string
-  if (!row.name || typeof row.name !== 'string' || !row.name.trim()) {
-    errors.push('name is required');
-    fieldErrors.push({ field: 'name', error: 'name is required' });
-  }
-
-  // class: required, non-empty string
-  if (!row.class || typeof row.class !== 'string' || !row.class.trim()) {
-    errors.push('class is required');
-    fieldErrors.push({ field: 'class', error: 'class is required' });
+  // name / class: required, normalised, length/control-character checked (#1543)
+  for (const [field, maxLength] of [['name', NAME_MAX_LENGTH], ['class', CLASS_MAX_LENGTH]]) {
+    const msg = nameError(field, normaliseName(row[field]), maxLength);
+    if (msg) {
+      errors.push(msg);
+      fieldErrors.push({ field, error: msg });
+    }
   }
 
   // feeAmount: optional, but if provided must be a positive number
@@ -715,8 +714,8 @@ async function bulkImportStudents(req, res, next) {
         index: i,
         schoolId,
         studentId: row.studentId.trim(),
-        name: row.name.trim(),
-        class: row.class.trim(),
+        name: normaliseName(row.name),
+        class: normaliseName(row.class),
         feeAmount: assignedFee,
         // insertMany() below bypasses the model's pre('save') encryption
         // hook (issue #1480), so parentEmail/parentPhone are encrypted here.
@@ -1003,16 +1002,8 @@ async function exportStudents(req, res, next) {
     const cursor = query.cursor();
 
     cursor.on('data', (doc) => {
-      const row = columns.map((col) => {
-        const val = doc[col];
-        if (val == null) return '';
-        const str = String(val);
-        // Quote fields that contain commas, quotes, or newlines
-        if (str.includes(',') || str.includes('"') || str.includes('\n')) {
-          return '"' + str.replace(/"/g, '""') + '"';
-        }
-        return str;
-      });
+      // Shared escaper: RFC 4180 quoting + formula-injection neutralisation (#1544)
+      const row = columns.map((col) => csvEscape(doc[col]));
       res.write(row.join(',') + '\n');
     });
 

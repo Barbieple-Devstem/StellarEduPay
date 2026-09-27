@@ -5,7 +5,9 @@ const SystemConfig = require('../models/systemConfigModel');
 const School = require('../models/schoolModel');
 const logger = require('../utils/logger').child('MaintenanceMode');
 
-const EXEMPT_PATHS = /^\/(health|metrics|api\/docs)/;
+// API docs are intentionally not exempt (Issue #1541): they must not remain
+// reachable while the rest of the API is closed for maintenance.
+const EXEMPT_PATHS = /^\/(health|metrics)/;
 
 async function maintenanceMode(req, res, next) {
   try {

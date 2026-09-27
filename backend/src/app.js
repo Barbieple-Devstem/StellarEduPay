@@ -212,10 +212,6 @@ app.get('/health/ready', healthReady);
 // Issue #671: OpenAPI/Swagger documentation
 try {
   const swaggerSpecs = require('./config/swagger');
-  app.get('/api/docs.json', (req, res) => {
-    res.setHeader('Content-Type', 'application/json');
-    res.json(swaggerSpecs);
-  });
 
   // Swagger UI — defaults to enabled outside production, but can be
   // explicitly toggled via SWAGGER_ENABLED (e.g. to turn it on for a
@@ -223,13 +219,24 @@ try {
   const swaggerEnabled = process.env.SWAGGER_ENABLED !== undefined
     ? process.env.SWAGGER_ENABLED === 'true'
     : process.env.NODE_ENV !== 'production';
+
+  // Issue #1541: the raw OpenAPI document maps every route, including admin
+  // endpoints. It is only public when Swagger is enabled; otherwise (the
+  // production default) it requires admin authentication.
+  const sendSpecs = (req, res) => {
+    res.setHeader('Content-Type', 'application/json');
+    res.json(swaggerSpecs);
+  };
   if (swaggerEnabled) {
+    app.get('/api/docs.json', sendSpecs);
     const swaggerUi = require('swagger-ui-express');
     app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpecs, {
       swaggerOptions: {
         url: '/api/docs.json',
       },
     }));
+  } else {
+    app.get('/api/docs.json', requireAdminAuth, sendSpecs);
   }
 } catch (err) {
   logger.warn('Swagger documentation not available', { error: err.message });

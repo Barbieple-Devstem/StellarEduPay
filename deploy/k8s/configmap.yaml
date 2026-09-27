@@ -10,3 +10,7 @@ data:
   # Used by the Next.js server to proxy /api/* requests server-side to the
   # backend pod (SSR and Next.js rewrites). Not exposed to the browser.
   BACKEND_PROXY_TARGET: "http://backend:5000"
+  # Public HTTPS base URL (frontend + /api via the ingress). Used for
+  # unsubscribe links and RFC 8058 List-Unsubscribe headers in emails.
+  # Required in production — the backend refuses to start without it.
+  APP_URL: "https://YOUR_DOMAIN_HERE"

@@ -467,7 +467,7 @@ node scripts/seed-test-data.js --clean  # Drop and recreate
 
 ## API Reference
 
-Full OpenAPI specification is available at `GET /api/docs.json` (or `/api/docs` in development). A static reference is in [`docs/api-spec.md`](docs/api-spec.md).
+Full OpenAPI specification is available at `GET /api/docs.json` (or `/api/docs` in development). In production (unless `SWAGGER_ENABLED=true`) `/api/docs.json` requires admin authentication. A static reference is in [`docs/api-spec.md`](docs/api-spec.md).
 
 ### Authentication
 
@@ -588,7 +588,7 @@ GET    /api/consistency             Run data consistency check
 GET    /health                 Health check (ok / degraded / unhealthy)
 GET    /metrics                Prometheus metrics
 GET    /api/docs               Swagger UI (development only)
-GET    /api/docs.json          OpenAPI spec JSON
+GET    /api/docs.json          OpenAPI spec JSON (admin auth in production)
 ```
 
 ### Error Response Format
@@ -889,7 +889,7 @@ See [`CHANGELOG.md`](CHANGELOG.md) for a complete history of changes, breaking c
 | `connection refused` (MongoDB) | DB container not ready or wrong URI | Check `docker ps`; ensure `MONGO_URI` includes `?replicaSet=rs0` |
 | `tx_bad_auth` | Secret key doesn't match public address | Verify the keypair in `.env` |
 | Rate-limit counters reset on restart | `REDIS_HOST` not set | Configure Redis for persistent counters |
-| Swagger UI missing in production | Expected — intentional | Set `NODE_ENV` to anything other than `production`, or use `/api/docs.json` |
+| Swagger UI missing in production | Expected — intentional | Set `NODE_ENV` to anything other than `production`, set `SWAGGER_ENABLED=true`, or fetch `/api/docs.json` with an admin token |
 
 ---
 
