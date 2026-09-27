@@ -459,8 +459,9 @@ async function getStudent(req, res, next) {
 }
 
 /**
- * Public endpoint: returns only non-PII fields for payment instructions
- * Returns: { name, class, feePaid }
+ * Public endpoint: returns only masked student info for payment identification
+ * Returns: { maskedName, class }
+ * Does NOT return feePaid status to prevent enumeration of payment data
  */
 async function getPublicStudentInfo(req, res, next) {
   try {
@@ -472,7 +473,6 @@ async function getPublicStudentInfo(req, res, next) {
     const student = await Student.findOne({ schoolId: req.schoolId, studentId, deletedAt: null }, {
       name: 1,
       class: 1,
-      feePaid: 1,
     });
     if (!student) {
       const err = new Error('Student not found');
@@ -480,10 +480,18 @@ async function getPublicStudentInfo(req, res, next) {
       return next(err);
     }
 
+    // Mask name to prevent enumeration of full student roster
+    // Format: First initial + *** + Last initial (e.g., "J*** S.")
+    const maskName = (name) => {
+      if (!name) return 'Unknown';
+      const parts = name.trim().split(/\s+/);
+      if (parts.length === 1) return `${parts[0][0]}***`;
+      return `${parts[0][0]}*** ${parts[parts.length - 1][0]}.`;
+    };
+
     const publicInfo = {
-      name: student.name,
+      maskedName: maskName(student.name),
       class: student.class,
-      feePaid: student.feePaid,
     };
 
     set(cacheKey, publicInfo, TTL.STUDENT);

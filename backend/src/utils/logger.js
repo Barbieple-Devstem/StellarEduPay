@@ -15,6 +15,7 @@
 
 const winston = require('winston');
 require('winston-daily-rotate-file');
+const { redactPii, stripQueryString } = require('./piiRedaction');
 
 const _fileTransports = [
   new winston.transports.DailyRotateFile({
@@ -92,11 +93,16 @@ function formatMessage(level, message, ...args) {
     return arg;
   });
 
+  // Apply PII redaction to all log arguments at info level and above
+  const redactedArgs = level !== 'DEBUG' 
+    ? formattedArgs.map(redactPii)
+    : formattedArgs;
+
   return {
     timestamp,
     level,
     message,
-    args: formattedArgs.length > 0 ? formattedArgs : undefined,
+    args: redactedArgs.length > 0 ? redactedArgs : undefined,
     pid: process.pid,
   };
 }
@@ -150,11 +156,10 @@ const logger = {
   getLevel,
 };
 
-const { redactConfig, SENSITIVE_KEYS } = require('./redactConfig');
+const { redactConfig } = require('./redactConfig');
 
 module.exports = logger;
 module.exports.logger = logger;
 module.exports.setLevel = setLevel;
 module.exports.getLevel = getLevel;
 module.exports.redactConfig = redactConfig;
-module.exports.SENSITIVE_KEYS = SENSITIVE_KEYS;

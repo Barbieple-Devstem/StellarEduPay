@@ -6,6 +6,7 @@ const { logAudit } = require('../services/auditService');
 const { get, set } = require('../cache');
 const { sendAdminAlert } = require('../services/alertService');
 const { getRedisClient, isRedisReady } = require('../config/redisClient');
+const { hashIp } = require('../utils/piiRedaction');
 
 // ── IP failure tracking constants ──────────────────────────────────────────────
 const IP_FAIL_WINDOW = 300;  // 5 minutes (seconds)
@@ -23,7 +24,8 @@ function ipBlockKey(ip) {
 // ── Shared failure handler (used by both middleware factories) ────────────────
 
 async function handleAuthFailure(req, res, ip, reason, code, { countTowardsBlock = true } = {}) {
-  logger.warn(`Failed auth attempt: ${reason} from ${ip}`, { endpoint: req.originalUrl, code });
+  const ipHash = hashIp(ip);
+  logger.warn(`Failed auth attempt: ${reason}`, { ipHash, endpoint: req.originalUrl, code });
 
   const schoolId = req.headers['x-school-id'] || 'system';
 

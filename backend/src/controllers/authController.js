@@ -6,6 +6,7 @@ const logger = require('../utils/logger');
 const { getRedisClient, isRedisReady } = require('../config/redisClient');
 const { get, set, del } = require('../cache');
 const { sendAdminAlert } = require('../services/alertService');
+const { maskEmail } = require('../utils/piiRedaction');
 
 // ── Constant-time string comparison ───────────────────────────────────────────
 
@@ -202,14 +203,16 @@ async function recordLoginFailure(loginId) {
       if (count >= LOGIN_FAIL_THRESHOLD) {
         await redis.set(lk, '1', 'EX', LOGIN_LOCK_TTL);
         set(lk, true, LOGIN_LOCK_TTL);
-        await sendAdminAlert(`Login lockout triggered for "${loginId}"`, { loginId, failCount: count });
+        // Mask loginId (email) in alert to prevent PII in logs
+        await sendAdminAlert(`Login lockout triggered`, { loginId: maskEmail(loginId), failCount: count });
       }
     } catch (e) {
       logger.warn('[AuthController] Redis error tracking login failure', { error: e.message });
     }
   } else if (newCount >= LOGIN_FAIL_THRESHOLD) {
     set(lk, true, LOGIN_LOCK_TTL);
-    await sendAdminAlert(`Login lockout triggered for "${loginId}"`, { loginId, failCount: newCount });
+    // Mask loginId (email) in alert to prevent PII in logs
+    await sendAdminAlert(`Login lockout triggered`, { loginId: maskEmail(loginId), failCount: newCount });
   }
 }
 
