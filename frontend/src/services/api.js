@@ -10,17 +10,21 @@ const api = axios.create({
 });
 
 // Attach the school context header to every request unless one is already set.
-// Derives school ID from authenticated user session (stored in localStorage after login).
-// The backend resolves school scope from X-School-ID (or X-School-Slug).
+// For super-admins: use selectedSchoolId from localStorage (school switcher selection).
+// For school users: use schoolId from their JWT token (stored after login).
 api.interceptors.request.use((config) => {
   const hasSchoolHeader = Object.keys(config.headers || {}).some(
     (h) => h.toLowerCase() === "x-school-id" || h.toLowerCase() === "x-school-slug"
   );
   if (!hasSchoolHeader) {
-    // Get school ID from authenticated user session stored in localStorage
+    // Super-admins select a school via the switcher, stored as selectedSchoolId.
+    // School users have their schoolId from the token, stored as schoolId.
+    const selectedSchoolId = typeof window !== 'undefined' ? localStorage.getItem('selectedSchoolId') : null;
     const schoolId = typeof window !== 'undefined' ? localStorage.getItem('schoolId') : null;
-    if (schoolId) {
-      config.headers = { ...config.headers, "X-School-ID": schoolId };
+    
+    const contextSchoolId = selectedSchoolId || schoolId;
+    if (contextSchoolId) {
+      config.headers = { ...config.headers, "X-School-ID": contextSchoolId };
     }
   }
   return config;
@@ -134,6 +138,22 @@ export const deleteFeeAdjustmentRule = (id, schoolId) =>
 // School settings
 export const getSchool = (slug) => api.get(`/schools/${slug}`);
 export const updateSchool = (slug, data) => api.patch(`/schools/${slug}`, data);
+export const listSchools = () => api.get('/schools');
+
+// User management
+export const createUser = (data) => api.post('/admin/users', data);
+export const listUsers = (params = {}) => api.get('/admin/users', { params });
+export const getUser = (userId) => api.get(`/admin/users/${userId}`);
+export const updateUser = (userId, data) => api.patch(`/admin/users/${userId}`, data);
+export const deleteUser = (userId) => api.delete(`/admin/users/${userId}`);
+
+export const createSchoolUser = (schoolId, data) => api.post(`/schools/${schoolId}/users`, data);
+export const listSchoolUsers = (schoolId) => api.get(`/schools/${schoolId}/users`);
+export const updateSchoolUser = (schoolId, userId, data) => api.patch(`/schools/${schoolId}/users/${userId}`, data);
+
+export const setPassword = (data) => api.post('/users/set-password', data);
+export const requestPasswordReset = (data) => api.post('/users/request-password-reset', data);
+export const resetPassword = (data) => api.post('/users/reset-password', data);
 
 // Payment plans
 export const createPaymentPlan = (studentId, data) =>

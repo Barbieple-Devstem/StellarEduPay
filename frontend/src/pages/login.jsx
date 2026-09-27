@@ -19,30 +19,57 @@ export default function LoginPage() {
   const router = useRouter();
   const { login } = useAdminAuthContext();
   const { t } = useTranslation();
-  const [username, setUsername] = useState('');
+  const [identifier, setIdentifier] = useState(''); // username or email
   const [password, setPassword] = useState('');
+  const [mfaCode, setMfaCode] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [requiresMfa, setRequiresMfa] = useState(false);
 
   async function handleSubmit(e) {
     e.preventDefault();
     setError('');
     setLoading(true);
     try {
-      const res = await api.post('/auth/login', { username, password });
-      login();
-      if (res.data?.mfaSetupRequired) {
-        router.push('/mfa-setup');
-      } else {
-        router.push(safeReturnTo(router.query.returnTo));
+      // Determine if identifier is email or username
+      const isEmail = identifier.includes('@');
+      const payload = isEmail
+        ? { email: identifier, password, ...(mfaCode && { mfaCode }) }
+        : { username: identifier, password, ...(mfaCode && { mfaCode }) };
+
+      const res = await api.post('/auth/login', payload);
+      
+      // Check if MFA is required
+      if (res.data?.requiresMfa) {
+        setRequiresMfa(true);
+        setLoading(false);
+        return;
+      }
+
+      // Only call login() when authentication is complete
+      if (res.status === 200 && !res.data?.requiresMfa) {
+        login();
+        if (res.data?.mfaSetupRequired) {
+          router.push('/mfa-setup');
+        } else {
+          router.push(safeReturnTo(router.query.returnTo));
+        }
       }
     } catch (err) {
       if (err.response) {
-        // HTTP error response from the server (4xx, 5xx)
         const { code, error } = err.response.data || {};
-        setError(getErrorMessage(code, error));
+        
+        // Handle specific error codes
+        if (code === 'ACCOUNT_LOCKED') {
+          setError(t('auth.accountLocked') || 'Too many failed login attempts. Account temporarily locked.');
+        } else if (code === 'INVALID_MFA_CODE') {
+          setError(t('auth.invalidMfaCode') || 'Invalid MFA code. Please try again.');
+        } else if (code === 'AUTH_MISCONFIGURED') {
+          setError(t('auth.serverError') || 'Server configuration error. Please contact support.');
+        } else {
+          setError(getErrorMessage(code, error));
+        }
       } else {
-        // Network failure, timeout, or no response at all
         setError(t('auth.networkError'));
       }
     } finally {
@@ -167,6 +194,15 @@ export default function LoginPage() {
           font-size: 0.78rem;
           color: #94a3b8;
         }
+        .mfa-info {
+          font-size: 0.85rem;
+          color: #0369a1;
+          background: #e0f2fe;
+          border: 1px solid #bae6fd;
+          border-radius: 8px;
+          padding: 0.65rem 0.875rem;
+          margin-bottom: 1rem;
+        }
         /* dark mode */
         html.dark .login-page { background: #0f172a; }
         html.dark .login-card { background: #1e293b; box-shadow: 0 4px 24px rgba(0,0,0,0.3), 0 0 0 1px rgba(255,255,255,0.06); }
@@ -181,45 +217,72 @@ export default function LoginPage() {
         }
         html.dark .login-input { background: #0a0e1f; border-color: #25304d; color: #f1f5f9; }
         html.dark .login-input:focus { border-color: #34d399; background: #0a0e1f; box-shadow: 0 0 0 4px rgba(52,211,153,0.22); }
+        html.dark .mfa-info { color: #7dd3fc; background: #0c4a6e; border-color: #075985; }
       `}</style>
 
       <div className="login-page">
         <div className="login-card">
           <div className="login-icon">🔐</div>
           <h1>{t("auth.title")}</h1>
-          <p className="login-sub">{t("auth.subtitle")}</p>
+          <p className="login-sub">{requiresMfa ? t("auth.mfaSubtitle") || "Enter your MFA code" : t("auth.subtitle")}</p>
 
           <form onSubmit={handleSubmit}>
-            <div className="login-field">
-              <label className="login-label" htmlFor="username">{t("auth.username")}</label>
-              <input
-                id="username"
-                className="login-input"
-                type="text"
-                value={username}
-                onChange={e => setUsername(e.target.value)}
-                required
-                autoComplete="username"
-                autoFocus
-                placeholder={t("auth.usernamePlaceholder")}
-                disabled={loading}
-              />
-            </div>
+            {!requiresMfa ? (
+              <>
+                <div className="login-field">
+                  <label className="login-label" htmlFor="identifier">{t("auth.emailOrUsername") || "Email or Username"}</label>
+                  <input
+                    id="identifier"
+                    className="login-input"
+                    type="text"
+                    value={identifier}
+                    onChange={e => setIdentifier(e.target.value)}
+                    required
+                    autoComplete="username"
+                    autoFocus
+                    placeholder={t("auth.identifierPlaceholder") || "admin@school.com or admin"}
+                    disabled={loading}
+                  />
+                </div>
 
-            <div className="login-field">
-              <label className="login-label" htmlFor="password">{t("auth.password")}</label>
-              <input
-                id="password"
-                className="login-input"
-                type="password"
-                value={password}
-                onChange={e => setPassword(e.target.value)}
-                required
-                autoComplete="current-password"
-                placeholder={t("auth.passwordPlaceholder")}
-                disabled={loading}
-              />
-            </div>
+                <div className="login-field">
+                  <label className="login-label" htmlFor="password">{t("auth.password")}</label>
+                  <input
+                    id="password"
+                    className="login-input"
+                    type="password"
+                    value={password}
+                    onChange={e => setPassword(e.target.value)}
+                    required
+                    autoComplete="current-password"
+                    placeholder={t("auth.passwordPlaceholder")}
+                    disabled={loading}
+                  />
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="mfa-info">
+                  {t("auth.mfaRequired") || "Multi-factor authentication is enabled. Please enter your 6-digit code or backup code."}
+                </div>
+                <div className="login-field">
+                  <label className="login-label" htmlFor="mfaCode">{t("auth.mfaCode") || "MFA Code"}</label>
+                  <input
+                    id="mfaCode"
+                    className="login-input"
+                    type="text"
+                    value={mfaCode}
+                    onChange={e => setMfaCode(e.target.value)}
+                    required
+                    autoComplete="one-time-code"
+                    autoFocus
+                    placeholder={t("auth.mfaPlaceholder") || "000000"}
+                    disabled={loading}
+                    maxLength={12}
+                  />
+                </div>
+              </>
+            )}
 
             {error && (
               <div className="login-error" role="alert">
@@ -233,6 +296,22 @@ export default function LoginPage() {
                 {loading ? t("auth.signingIn") : t("auth.signIn")}
               </span>
             </button>
+
+            {requiresMfa && (
+              <button
+                type="button"
+                className="login-btn"
+                style={{ marginTop: '0.5rem', background: '#6b7280' }}
+                onClick={() => {
+                  setRequiresMfa(false);
+                  setMfaCode('');
+                  setError('');
+                }}
+                disabled={loading}
+              >
+                {t("auth.back") || "Back"}
+              </button>
+            )}
           </form>
 
           <p className="login-footer">{t("auth.footer")}</p>

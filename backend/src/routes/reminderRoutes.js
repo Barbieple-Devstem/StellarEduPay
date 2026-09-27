@@ -24,8 +24,8 @@ router.get('/unsubscribe', unsubscribeViaToken);
 router.post('/unsubscribe', parseForm, confirmUnsubscribeViaToken);
 router.post('/resubscribe', parseForm, resubscribeViaToken);
 
-// All other reminder routes require admin auth + school context
-router.use(requireAdminAuth);
+// All other reminder routes require school auth + owner/staff role
+router.use(requireSchoolAuth(['owner', 'staff']));
 router.use(resolveSchool);
 
 router.post('/trigger', reminderTriggerLimiter, triggerReminders);
