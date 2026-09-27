@@ -171,21 +171,6 @@ describe('PII Redaction Utilities', () => {
       });
     });
 
-    // describe('redactUri', () => {
-    //   it('redacts credentials in MongoDB URIs', () => {
-    //     expect(redactUri('mongodb://user:pass123@host:27017/db')).toBe('mongodb://user:[REDACTED]@host:27017/db');
-    //     expect(redactUri('mongodb+srv://admin:secret@cluster.mongodb.net/db')).toBe('mongodb+srv://admin:[REDACTED]@cluster.mongodb.net/db');
-    //   });
-
-    //   it('redacts credentials in Redis URIs', () => {
-    //     expect(redactUri('redis://:password123@host:6379')).toBe('redis://:[REDACTED]@host:6379');
-    //   });
-
-    //   it('does not modify URIs without credentials', () => {
-    //     expect(redactUri('https://example.com')).toBe('https://example.com');
-    //     expect(redactUri('mongodb://host:27017/db')).toBe('mongodb://host:27017/db');
-    //   });
-    // });
 
     describe('redactConfig', () => {
       it('redacts all secret-pattern keys', () => {
