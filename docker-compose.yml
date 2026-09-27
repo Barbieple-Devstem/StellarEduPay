@@ -27,6 +27,16 @@ services:
       # the POST /api/internal/backup-heartbeat call. Must be the same value
       # set in the backup service. See issue #1102.
       - BACKUP_NOTIFY_TOKEN=${BACKUP_NOTIFY_TOKEN:-}
+      # Email bounce/complaint webhook authentication (issue #1537). In
+      # production the webhook rejects every call unless at least one of these
+      # is configured: EMAIL_SNS_TOPIC_ARNS (SES via SNS, signature-verified),
+      # EMAIL_SENDGRID_WEBHOOK_PUBLIC_KEY (SendGrid Signed Event Webhook), or
+      # EMAIL_WEBHOOK_SECRET (shared secret, X-Webhook-Token header only).
+      - EMAIL_WEBHOOK_SECRET=${EMAIL_WEBHOOK_SECRET:-}
+      - EMAIL_SNS_TOPIC_ARNS=${EMAIL_SNS_TOPIC_ARNS:-}
+      - EMAIL_SENDGRID_WEBHOOK_PUBLIC_KEY=${EMAIL_SENDGRID_WEBHOOK_PUBLIC_KEY:-}
+      # Date after which the deprecated V1 webhook signature is never sent (#1539).
+      - WEBHOOK_V1_SUNSET=${WEBHOOK_V1_SUNSET:-2027-02-28}
     depends_on:
       mongo:
         condition: service_healthy

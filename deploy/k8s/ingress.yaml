@@ -23,6 +23,12 @@ spec:
         paths:
           # API traffic goes directly to the backend; /api prefix is preserved
           # so the backend's Express routes (which are all under /api/) match.
+          #
+          # Health endpoints (issue #1540): the backend's /health, /health/live
+          # and /health/ready are deliberately NOT routed here — only /api is
+          # forwarded to the backend, so they stay reachable solely on the
+          # in-cluster Service for kubelet probes. Do not add a /health path.
+          # Detailed diagnostics are at /api/admin/health/details (admin auth).
           - path: /api
             pathType: Prefix
             backend:

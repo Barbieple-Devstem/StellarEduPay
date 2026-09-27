@@ -61,6 +61,27 @@ spec:
                   key: MONGO_URI
             - name: REDIS_HOST
               value: "redis"
+            # Email bounce/complaint webhook authentication (issue #1537).
+            # Optional keys — in production the webhook rejects every call
+            # unless at least one of them is present in the secret.
+            - name: EMAIL_WEBHOOK_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: stellaredupay
+                  key: EMAIL_WEBHOOK_SECRET
+                  optional: true
+            - name: EMAIL_SNS_TOPIC_ARNS
+              valueFrom:
+                secretKeyRef:
+                  name: stellaredupay
+                  key: EMAIL_SNS_TOPIC_ARNS
+                  optional: true
+            - name: EMAIL_SENDGRID_WEBHOOK_PUBLIC_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: stellaredupay
+                  key: EMAIL_SENDGRID_WEBHOOK_PUBLIC_KEY
+                  optional: true
           readinessProbe:
             httpGet:
               path: /health

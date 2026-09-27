@@ -42,6 +42,10 @@ healthcheck:
 - Retries up to 5 times before marking as unhealthy
 - Waits 30 seconds before starting checks (allows Node.js app to start and connect to MongoDB)
 
+`/health` is public, so its body is just `{ "status": "..." }` (Issue #1540);
+the detailed per-dependency report is at `GET /api/admin/health/details`
+(admin auth).
+
 The `/health` endpoint returns a three-tier status, not a simple pass/fail:
 - `200 OK` with `status: "healthy"` — database, Stellar, and other subsystems are all fine
 - `200 OK` with `status: "degraded"` — MongoDB is up, but a non-critical subsystem (e.g. Stellar Horizon unreachable, Redis not ready, retry queue failed) is impaired; the app keeps serving traffic
