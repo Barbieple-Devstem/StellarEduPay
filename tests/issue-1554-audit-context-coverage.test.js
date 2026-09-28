@@ -17,11 +17,14 @@
  */
 
 // ── Env vars must be set BEFORE any backend module is required ────────────────
-process.env.MONGO_URI                = process.env.MONGO_URI                || 'mongodb://127.0.0.1:27017/test';
-process.env.JWT_SECRET               = process.env.JWT_SECRET               || 'test-jwt-secret-for-audit-coverage-tests';
-process.env.SCHOOL_WALLET_ADDRESS    = process.env.SCHOOL_WALLET_ADDRESS    || 'GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5';
+// Route files transitively load controllers which load config/index.js, which
+// validates required env vars on require(). Set them here so the module graph
+// can resolve without errors.
+process.env.MONGO_URI               = process.env.MONGO_URI               || 'mongodb://127.0.0.1:27017/test';
+process.env.JWT_SECRET              = process.env.JWT_SECRET              || 'test-jwt-secret-for-audit-coverage-tests';
+process.env.SCHOOL_WALLET_ADDRESS   = process.env.SCHOOL_WALLET_ADDRESS   || 'GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5';
 process.env.RECEIPT_SIGNATURE_SECRET = process.env.RECEIPT_SIGNATURE_SECRET || 'test-receipt-secret-for-audit-coverage';
-process.env.STELLAR_NETWORK          = process.env.STELLAR_NETWORK          || 'testnet';
+process.env.STELLAR_NETWORK         = process.env.STELLAR_NETWORK         || 'testnet';
 
 const { auditContext } = require('../backend/src/middleware/auditContext');
 
@@ -44,28 +47,41 @@ const AUDIT_EXEMPT = new Set([
 
 /**
  * Flatten an Express Router's internal layer stack into a list of
- * { method, path, routeFns } records. Handles nested routers recursively.
+ * { method, path, fns } records.  Handles nested routers recursively.
  */
 function flattenRouter(router, prefix = '') {
   const results = [];
+
   const stack = router?.stack ?? router?.router?.stack ?? [];
 
   for (const layer of stack) {
     if (!layer.route && layer.handle?.stack) {
-      const subPath = prefix + (layer.path ?? '');
+      // Nested router (e.g. router.use('/path', subRouter))
+      const subPath = (layer.regexp?.source ?? '').includes('^\\/')
+        ? prefix + (layer.path ?? '')
+        : prefix;
       results.push(...flattenRouter(layer.handle, subPath));
       continue;
     }
+
     if (!layer.route) continue;
 
     const route = layer.route;
     const routePath = prefix + (route.path || '');
-    const routeFns = route.stack.map(l => l.handle).filter(Boolean);
 
     for (const routeLayer of route.stack) {
       const method = routeLayer.method?.toUpperCase();
       if (!method) continue;
-      results.push({ method, path: routePath, routeFns });
+
+      results.push({
+        method,
+        path: routePath,
+        fns: routeLayer.handle
+          ? [routeLayer.handle]
+          : (routeLayer.fns ?? []),
+        // The route itself has the full middleware chain
+        routeFns: route.stack.map(l => l.handle).filter(Boolean),
+      });
     }
   }
   return results;

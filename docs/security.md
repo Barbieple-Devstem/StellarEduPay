@@ -400,14 +400,9 @@ File logs are automatically rotated and deleted by `winston-daily-rotate-file`.
 
 ## Audited Action Catalogue (#1554)
 
-Every authenticated, state-changing request passes through `auditContext` middleware
-and calls `logAudit` in the handler. All entries land in the tamper-evident
-`audit_log` MongoDB collection with `performedBy`, `ipAddress`, `userAgent`,
-`targetId`, `targetType`, and a `details` payload.
+Every authenticated, state-changing request passes through `auditContext` middleware and calls `logAudit` in the handler. All entries land in the tamper-evident `audit_log` MongoDB collection.
 
-An automated regression test (`tests/issue-1554-audit-context-coverage.test.js`)
-walks the Express router stack and fails if any non-GET authenticated route is
-missing `auditContext`.
+An automated regression test (`tests/issue-1554-audit-context-coverage.test.js`) walks the Express router stack and fails if a non-GET authenticated route is missing `auditContext`.
 
 ### Student management
 
@@ -482,11 +477,13 @@ missing `auditContext`.
 
 ### Public / intentionally un-audited endpoints
 
+These endpoints either have no authenticated actor at call time or use their own documented verification mechanism:
+
 | Endpoint | Reason |
 |----------|--------|
-| `POST /api/auth/login` | No actor yet; login outcome logged by the controller |
-| `POST /api/auth/refresh` | Token rotation; no state mutation |
-| `POST /api/auth/logout` | Session teardown; no persistent state change |
+| `POST /api/auth/login` | No actor yet; auth result logged by controller |
+| `POST /api/auth/refresh` | Token rotation; no actor context |
+| `POST /api/auth/logout` | Session teardown; no mutation |
 | `POST /api/payments/intent` | Unauthenticated caller |
 | `POST /api/payments/submit` | Unauthenticated caller |
 | `POST /api/payments/verify` | Unauthenticated caller |

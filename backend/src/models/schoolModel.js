@@ -224,9 +224,38 @@ const schoolSchema = new mongoose.Schema(
      * MFA (TOTP) protection for school admin operations.
      * mfaSecret is AES-256-GCM encrypted; key is derived from JWT_SECRET.
      * mfaBackupCodes holds SHA-256 hashes — each code is single-use.
+     *
+     * DEPRECATION NOTICE (issue #1553):
+     * mfaSecret / mfaBackupCodes on the School document represent a shared
+     * second factor distributed to every admin of the school — a known-bad
+     * security pattern. They are retained here only for a transition window.
+     * New deployments should use per-user MFA (User.mfaSecret) enforced via
+     * the requireMfa policy flag below.  The mfaSecret / mfaBackupCodes fields
+     * will be removed in a future migration once all schools have migrated.
      */
     mfaEnabled: { type: Boolean, default: false },
     mfaSecret: { type: String, default: null },
+    /**
+     * MFA policy flag (issue #1553).
+     *
+     * When requireMfa: true, every DB user belonging to this school MUST have
+     * personal MFA enrolled (User.mfaEnabled === true).  At login time,
+     * authController checks this flag and:
+     *   - If the user already has personal MFA → proceeds normally.
+     *   - If the user has NO personal MFA → issues a restricted
+     *     mfaSetupPending token that only allows the MFA setup endpoints,
+     *     forcing enrolment before any other action is permitted.
+     *
+     * This replaces the shared school-level mfaSecret approach: each user
+     * gets their own TOTP secret, each MFA event is individually attributed
+     * in the audit trail, and a departing employee's removal does not require
+     * re-issuing a new secret to everyone else.
+     *
+     * When requireMfa: false (default), MFA is optional.  Users who have
+     * enrolled personal MFA still use it; those who have not are allowed in
+     * without a second factor.
+     */
+    requireMfa: { type: Boolean, default: false },
     /**
      * Per-school maintenance mode. When true, the school's API endpoints
      * return 503 Service Unavailable. Overrides the global maintenance mode

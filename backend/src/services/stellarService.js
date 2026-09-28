@@ -87,11 +87,19 @@ async function extractValidPayment(tx, walletAddress) {
   // truthy, so a failed-but-included tx (or one missing the flag) is rejected.
   if (tx.successful !== true) return null;
 
-  // Unwrap fee-bump transaction to get the inner transaction
-  const innerTx = tx.inner_transaction || tx;
+  // #1556 — Fee-bump transactions: Horizon exposes memo_type, memo and the
+  // operations() link on the TOP-LEVEL transaction record regardless of whether
+  // it is a fee-bump or a regular transaction. The inner_transaction sub-object
+  // only carries { hash, signatures, max_fee } — it does NOT have memo_type,
+  // memo, or operations(). Reading those from inner_transaction always yields
+  // undefined / TypeError, so fee-bumped payments were silently dropped.
+  // Fix: always use the top-level `tx` for memo/operations. The inner hash is
+  // preserved separately for traceability when it differs.
+  const isFeeBomp = Boolean(tx.inner_transaction);
+  const innerHash = isFeeBomp ? tx.inner_transaction.hash : null;
 
   // Check memo type and handle accordingly
-  const memoType = innerTx.memo_type || 'none';
+  const memoType = tx.memo_type || 'none';
   
   if (memoType === 'none') {
     // No memo provided
@@ -102,23 +110,25 @@ async function extractValidPayment(tx, walletAddress) {
     // MEMO_RETURN — no canonical encoding, so it cannot identify a payment.
     logger.warn('Transaction has unsupported memo type', {
       txHash: tx.hash,
+      innerHash,
       memoType,
-      memo: innerTx.memo,
+      memo: tx.memo,
     });
     return null;
   }
 
   // MEMO_ID / MEMO_HASH decode back to the canonical intent memo (#1118).
-  const memo = decodeMemoToCanonical(innerTx.memo, memoType);
+  const memo = decodeMemoToCanonical(tx.memo, memoType);
   if (!memo) {
     logger.warn('Transaction memo could not be decoded to a payment reference', {
       txHash: tx.hash,
+      innerHash,
       memoType,
     });
     return null;
   }
 
-  const ops = await withStellarRetry(() => innerTx.operations(), {
+  const ops = await withStellarRetry(() => tx.operations(), {
     label: "extractValidPayment.operations",
     context: `Transaction ${tx.hash} operations`,
   });
@@ -133,7 +143,7 @@ async function extractValidPayment(tx, walletAddress) {
   const asset = detectAsset(payOp);
   if (!asset) return null;
 
-  return { payOp, memo, asset, memoType };
+  return { payOp, memo, asset, memoType, innerHash };
 }
 
 function validatePaymentAgainstFee(paymentAmount, expectedFee) {
@@ -516,11 +526,14 @@ async function verifyTransaction(txHash, walletAddress, schoolId = null) {
     throw err;
   }
 
-  // Unwrap fee-bump transaction to get the inner transaction
-  const innerTx = tx.inner_transaction || tx;
+  // #1556 — Fee-bump transactions: memo_type, memo and operations() all live
+  // on the TOP-LEVEL tx record. inner_transaction only contains { hash,
+  // signatures, max_fee }. Preserve the inner hash for traceability but never
+  // read memo/operations from it.
+  const innerHash = tx.inner_transaction ? tx.inner_transaction.hash : null;
 
   // 2. Find matching payment operation first (destination + asset checks before memo)
-  const ops = await withStellarRetry(() => innerTx.operations(), {
+  const ops = await withStellarRetry(() => tx.operations(), {
     label: "verifyTransaction.operations",
     context: `Transaction ${txHash} operations`,
   });
@@ -548,7 +561,7 @@ async function verifyTransaction(txHash, walletAddress, schoolId = null) {
   }
 
   // 3. Check memo type (after destination/asset are validated)
-  const memoType = innerTx.memo_type || 'none';
+  const memoType = tx.memo_type || 'none';
 
   if (memoType === 'none') {
     const err = new Error(
@@ -570,7 +583,7 @@ async function verifyTransaction(txHash, walletAddress, schoolId = null) {
     throw err;
   }
 
-  const memo = decodeMemoToCanonical(innerTx.memo, memoType);
+  const memo = decodeMemoToCanonical(tx.memo, memoType);
   if (!memo) {
     // A non-text memo that fails to decode carries no student identity — it is
     // an unrecognised value rather than a missing one, so report it as such.
@@ -592,9 +605,12 @@ async function verifyTransaction(txHash, walletAddress, schoolId = null) {
   const amount = normalizeAmount(payOp.amount);
 
   // 5. Validate payment amount is within configured limits
+  // #1555 — detectAsset returns { assetCode, assetType, assetIssuer }.
+  // The previous `asset?.code` was always undefined, causing every USDC
+  // payment to be validated against XLM limits. Use `assetCode` instead.
   const limitValidation = await validatePaymentAmount(amount, {
     schoolId,
-    asset: asset?.code,
+    asset: asset?.assetCode,
   });
   if (!limitValidation.valid) {
     const err = new Error(limitValidation.error);
@@ -622,6 +638,7 @@ async function verifyTransaction(txHash, walletAddress, schoolId = null) {
 
   return {
     hash: tx.hash,
+    innerHash,
     memo: memo,
     studentId: memo,
     amount: amount,
@@ -764,7 +781,7 @@ async function syncPaymentsForSchool(school) {
 
       const limitValidation = await validatePaymentAmount(paymentAmount, {
         schoolId,
-        asset: asset?.code,
+        asset: asset?.assetCode,  // #1555: detectAsset returns assetCode, not code
       });
       if (!limitValidation.valid) {
         summary.failed++;

@@ -894,17 +894,6 @@ async function resetPayment(req, res, next) {
       },
     });
 
-    await logAudit({
-      schoolId,
-      action: 'STUDENT_PAYMENT_RESET',
-      performedBy: req.auditContext?.performedBy,
-      ipAddress: req.auditContext?.ipAddress,
-      userAgent: req.auditContext?.userAgent,
-      targetId: studentId,
-      targetType: 'student',
-      details: { feePaid: student.feePaid, totalPaid: student.totalPaid, remainingBalance: student.remainingBalance, paymentsDeleted: deletePayments },
-    });
-
     res.json({
       message: 'Payment status reset successfully',
       student: {
@@ -965,7 +954,14 @@ async function reconcileStudent(req, res, next) {
         userAgent: req.auditContext?.userAgent,
         targetId: studentId,
         targetType: 'student',
-        details: { reconciled: true, storedTotal, computedTotal, diff: computedTotal - storedTotal },
+        details: {
+          reconciled: true,
+          storedTotal,
+          computedTotal,
+          diff: computedTotal - storedTotal,
+          feePaid: student.feePaid,
+          remainingBalance: student.remainingBalance,
+        },
       });
 
       return res.json({
@@ -987,7 +983,14 @@ async function reconcileStudent(req, res, next) {
       userAgent: req.auditContext?.userAgent,
       targetId: studentId,
       targetType: 'student',
-      details: { reconciled: false, storedTotal, computedTotal, diff: 0 },
+      details: {
+        reconciled: false,
+        storedTotal,
+        computedTotal,
+        diff: 0,
+        feePaid: student.feePaid,
+        remainingBalance: student.remainingBalance,
+      },
     });
 
     res.json({
