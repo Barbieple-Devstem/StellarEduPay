@@ -8,6 +8,7 @@ const {
   setupUserMfa, verifyAndEnableUserMfa, disableUserMfa,
 } = require('../controllers/mfaController');
 const { requireAdminAuth, requireSchoolAuth } = require('../middleware/auth');
+const { auditContext } = require('../middleware/auditContext');
 
 const router = express.Router();
 
@@ -20,6 +21,9 @@ const loginLimiter = rl(
 );
 
 // ── Core auth routes ──────────────────────────────────────────────────────────
+// login / logout / refresh are public or semi-public — no auditContext (no
+// authenticated actor yet at the time they run). The controllers themselves
+// call logAudit with their own context when needed.
 router.post('/login', loginLimiter, handleLogin);
 router.post('/refresh', handleRefresh);
 router.post('/logout', handleLogout);
@@ -28,21 +32,24 @@ router.get('/me', requireAdminAuth, handleMe);
 // ── Password management ───────────────────────────────────────────────────────
 // #1360 — Changing the password immediately invalidates all existing sessions
 // so stolen refresh tokens cannot outlive a password reset.
-router.post('/change-password', requireSchoolAuth(), handleChangePassword);
+router.post('/change-password', requireSchoolAuth(), auditContext, handleChangePassword);
 
 // ── Session management ────────────────────────────────────────────────────────
 router.get('/sessions', requireAdminAuth, handleListSessions);
-router.delete('/sessions/:sessionId', requireAdminAuth, handleRevokeSession);
+// #1554 — session revocation changes auth state; attribute the actor.
+router.delete('/sessions/:sessionId', requireAdminAuth, auditContext, handleRevokeSession);
 
 // ── School-level TOTP / MFA routes (require super-admin auth) ────────────────
-router.post('/mfa/setup',   requireAdminAuth, setupMfa);
-router.post('/mfa/verify',  requireAdminAuth, verifyAndEnableMfa);
-router.post('/mfa/disable', requireAdminAuth, disableMfa);
-router.post('/mfa/backup-codes/regenerate', requireAdminAuth, regenerateBackupCodes);
+// #1554 — all MFA mutations (setup/verify/disable/backup) affect authentication
+// state and must appear in the audit trail with the acting admin's identity.
+router.post('/mfa/setup',   requireAdminAuth, auditContext, setupMfa);
+router.post('/mfa/verify',  requireAdminAuth, auditContext, verifyAndEnableMfa);
+router.post('/mfa/disable', requireAdminAuth, auditContext, disableMfa);
+router.post('/mfa/backup-codes/regenerate', requireAdminAuth, auditContext, regenerateBackupCodes);
 
 // ── User-level TOTP / MFA routes (any authenticated user) ────────────────────
-router.post('/mfa/user/setup',   requireSchoolAuth(), setupUserMfa);
-router.post('/mfa/user/verify',  requireSchoolAuth(), verifyAndEnableUserMfa);
-router.post('/mfa/user/disable', requireSchoolAuth(), disableUserMfa);
+router.post('/mfa/user/setup',   requireSchoolAuth(), auditContext, setupUserMfa);
+router.post('/mfa/user/verify',  requireSchoolAuth(), auditContext, verifyAndEnableUserMfa);
+router.post('/mfa/user/disable', requireSchoolAuth(), auditContext, disableUserMfa);
 
 module.exports = router;
