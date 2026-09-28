@@ -184,6 +184,23 @@ const bulkImportLimiter    = rl(
   { name: 'rl:bulkimport', keyGenerator: (req) => req.schoolId || 'unknown-tenant' },
 );
 
+// GET /api/students/public/:studentId is a public endpoint that returns student info.
+// Without strict rate limiting, this can be used to enumerate student rosters.
+// Limit to 10 requests per IP per minute AND per school (dual key) with alerting.
+const publicStudentLimiter = rl(
+  60 * 1000,
+  10,
+  { error: 'Too many student lookup requests. Please try again later.', code: 'RATE_LIMIT_EXCEEDED' },
+  { 
+    name: 'rl:publicstudent',
+    keyGenerator: (req) => {
+      // Dual key: IP + school to prevent enumeration across different schools from same IP
+      const schoolId = req.schoolId || req.headers['x-school-id'] || 'unknown';
+      return `${req.ip}:${schoolId}`;
+    }
+  },
+);
+
 module.exports = {
   rl,
   generalLimiter,
@@ -191,6 +208,8 @@ module.exports = {
   verifyLimiter,
   reminderTriggerLimiter,
   bulkImportLimiter,
+  publicStudentLimiter,
+  syncLimiter,
   // Exported for tests only — the shared decision function both the Redis
   // and in-memory paths call, plus the fallback-store internals.
   _bucketInfo,

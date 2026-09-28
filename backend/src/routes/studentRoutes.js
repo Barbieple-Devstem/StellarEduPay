@@ -31,7 +31,7 @@ const {
 const { resolveSchool } = require('../middleware/schoolContext');
 const { requireAdminAuth, requireSchoolAuth } = require('../middleware/auth');
 const { auditContext } = require('../middleware/auditContext');
-const { bulkImportLimiter } = require('../middleware/rateLimiter');
+const { bulkImportLimiter, publicStudentLimiter } = require('../middleware/rateLimiter');
 const streamingCsvUpload = require('../middleware/streamingCsvUpload');
 
 router.use(resolveSchool);
@@ -47,7 +47,7 @@ router.get('/summary', requireSchoolAuth(), getPaymentSummary);
 router.get('/overdue', requireSchoolAuth(), getOverdueStudents);
 
 // Public routes
-router.get('/public/:studentId', validateStudentIdParam, getPublicStudentInfo);
+router.get('/public/:studentId', publicStudentLimiter, validateStudentIdParam, getPublicStudentInfo);
 router.get('/:studentId', requireAdminAuth, validateStudentIdParam, getStudent);
 // updateStudent performs a partial update, so PATCH is the accurate verb (issue
 // #1576); PUT is kept as an alias since the frontend previously relied on it.

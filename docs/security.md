@@ -305,3 +305,93 @@ This implementation supports:
 - **Local privacy regulations** — configurable retention period per deployment
 
 Schools should configure `STUDENT_PII_RETENTION_DAYS` to match their legal obligations and operational needs.
+
+
+---
+
+## Log Redaction and PII Minimization
+
+To comply with data minimization requirements (GDPR Article 5, storage limitation), the platform automatically redacts personal data from all application logs.
+
+### What is redacted
+
+#### PII Fields
+All log entries at **info level and above** have the following fields masked:
+
+| Field | Redaction Format |
+|-------|-----------------|
+| `email`, `parentEmail`, `contactEmail`, `loginId` | `u***@example.com` (first char + domain visible) |
+| `phone`, `parentPhone` | `****7890` (last 4 digits visible) |
+| `name` | `J*** S.` (first initial + last initial) |
+| `studentId`, `memo`, `senderAddress`, `walletAddress` | `[REDACTED]` |
+
+#### IP Addresses
+- Raw IP addresses are **never logged**
+- Instead, IPs are hashed using HMAC-SHA256 with a per-boot secret
+- Same IP produces the same hash within a server session (for correlation/debugging)
+- Hashes are not reversible and do not persist across server restarts
+
+#### Query Strings
+- Query strings are **stripped** from all logged URLs to prevent token/secret leakage
+- Example: `/api/payments?token=abc123` → `/api/payments`
+
+#### Secrets in Configuration
+All environment variables matching the pattern `/(SECRET|PASSWORD|TOKEN|KEY|URI|HASH)$/i` are redacted in config dumps, with explicit exceptions for known non-secret keys like `SIGNER_KEY_SOURCE`, `EMAIL_PROVIDER`, etc.
+
+Credentials embedded in URIs are also redacted:
+- `mongodb://user:pass@host` → `mongodb://user:[REDACTED]@host`
+- `redis://:pass@host` → `redis://:[REDACTED]@host`
+
+### Implementation
+
+Redaction is applied in three layers:
+
+1. **Logger format** (`backend/src/utils/logger.js`): The `formatMessage()` function applies `redactPii()` to all log arguments at info level and above
+2. **Request logger** (`backend/src/middleware/requestLogger.js`): IP addresses are hashed via `hashIp()`, URLs are stripped via `stripQueryString()`
+3. **Auth middleware** (`backend/src/middleware/auth.js`): Failed auth attempts log hashed IPs instead of raw IPs
+
+### Verification
+
+Run the test suite to verify redaction:
+
+```bash
+npm test -- backend/tests/piiRedaction.test.js
+```
+
+The test verifies:
+- Email addresses are masked in logs
+- Phone numbers are masked in logs
+- Names are masked in logs
+- IP addresses are hashed (not logged in plaintext)
+- Query strings are stripped from URLs
+- Config dumps redact all secret-pattern environment variables
+
+### Audit Log Exceptions
+
+**Audit logs** (`audit_log` collection in MongoDB) are **not redacted** because they are the authoritative record for compliance and forensic investigation. However:
+- Audit logs are access-controlled (admin-only via authenticated API)
+- Audit logs respect the retention period configured in `AUDIT_LOG_RETENTION_DAYS`
+- Audit logs are never written to file logs or stdout
+
+### Log Retention
+
+| Log Type | Retention | Location |
+|----------|-----------|----------|
+| File logs (combined/error) | `LOG_MAX_FILES` (default: 14 days) | `logs/combined-*.log`, `logs/error-*.log` |
+| Aggregated logs | Per aggregator config | ELK, Datadog, CloudWatch, etc. |
+| Audit logs | `AUDIT_LOG_RETENTION_DAYS` (default: 365 days) | MongoDB `audit_log` collection |
+
+File logs are automatically rotated and deleted by `winston-daily-rotate-file`.
+
+### Operator Responsibilities
+
+1. **Configure log aggregators** to respect the platform's retention policy
+2. **Restrict access** to log files and aggregation tools — logs still contain operational context that could be sensitive
+3. **Do not disable redaction** — all PII redaction is mandatory for production use
+4. **Monitor alerts** — admin alerts may contain masked PII; ensure alert channels are access-controlled
+
+### Related Documentation
+
+- [Data Privacy and Retention Policy](./privacy.md) — full data retention and data subject rights
+- [Audit Service](../backend/src/services/auditService.js) — audit log implementation
+- [PII Redaction Utilities](../backend/src/utils/piiRedaction.js) — redaction functions
