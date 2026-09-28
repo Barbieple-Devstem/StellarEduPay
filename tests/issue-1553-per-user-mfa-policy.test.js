@@ -1,5 +1,12 @@
 'use strict';
 
+// ── Env vars must be set BEFORE any backend module is required ────────────────
+process.env.MONGO_URI               = process.env.MONGO_URI               || 'mongodb://127.0.0.1:27017/test';
+process.env.JWT_SECRET              = process.env.JWT_SECRET              || 'test-jwt-secret-for-mfa-policy-tests-32chars!';
+process.env.SCHOOL_WALLET_ADDRESS   = process.env.SCHOOL_WALLET_ADDRESS   || 'GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5';
+process.env.RECEIPT_SIGNATURE_SECRET = process.env.RECEIPT_SIGNATURE_SECRET || 'test-receipt-secret-mfa-policy';
+process.env.STELLAR_NETWORK         = process.env.STELLAR_NETWORK         || 'testnet';
+
 /**
  * Tests for issue #1553 — school-level MFA shared secret replaced with
  * per-user MFA policy.
@@ -13,8 +20,8 @@
  *  5. School model exposes requireMfa field and it defaults to false.
  */
 
-const mongoose = require('mongoose');
-const bcrypt = require('bcryptjs');
+const mongoose = require('../backend/node_modules/mongoose');
+const bcrypt = require('../backend/node_modules/bcryptjs');
 const { MongoMemoryServer } = require('mongodb-memory-server');
 
 let mongoServer;
@@ -35,12 +42,12 @@ beforeAll(async () => {
 
   if (USE_EXTERNAL_MONGO) {
     const baseUri = process.env.MONGO_URI.replace(/\/[^/?]+(\?|$)/, `/${TEST_DB}$1`);
-    await mongoose.connect(baseUri);
+    await mongoose.connect(baseUri, { serverSelectionTimeoutMS: 15000 });
   } else {
     mongoServer = await MongoMemoryServer.create();
     await mongoose.connect(mongoServer.getUri());
   }
-});
+}, 30000);
 
 afterAll(async () => {
   await mongoose.connection.db.dropDatabase();
@@ -51,12 +58,15 @@ afterAll(async () => {
 beforeEach(async () => {
   const School = require('../backend/src/models/schoolModel');
   const User   = require('../backend/src/models/userModel');
+  // School model is not tenant-scoped (no tenantScope plugin), no filter restriction needed
   await School.deleteMany({});
   await User.deleteMany({});
-});
+}, 30000);
 
 afterEach(() => {
-  jest.resetModules();
+  // Do NOT call jest.resetModules() here — it would cause the mongoose instance
+  // to lose its connection on subsequent test runs (the reconnected model would
+  // use a different mongoose instance than the one connected in beforeAll).
   delete process.env.REQUIRE_MFA;
 });
 
@@ -68,7 +78,7 @@ async function createSchool({ requireMfa = false } = {}) {
     schoolId: 'SCH-MFA-POLICY',
     name: 'MFA Policy Test School',
     slug: 'mfa-policy-test',
-    stellarAddress: 'GSCHOOLMFA1234567890ABCDEFGH',
+    stellarAddress: 'GCRBBZAIZ6FR25RUV4FDU4SJH6EHXAKUM3SGXKASZ3P3KLJK6YPRYB47',
     requireMfa,
   });
 }
@@ -223,7 +233,7 @@ describe('handleLogin — requireMfa school policy (issue #1553)', () => {
       schoolId: 'SCH-LEGACY-MFA',
       name: 'Legacy MFA School',
       slug: 'legacy-mfa-school',
-      stellarAddress: 'GLEGACYSCHOOL1234567890ABCDE',
+      stellarAddress: 'GBL4WH6KTTBXFYPZTWC3ZUVDLMAKT6A7T5PHHC63AMR3HQDNOXKU5ESM',
       mfaEnabled: true,
       mfaSecret: encryptMfaSecret(generated.base32),
       requireMfa: false,  // policy NOT requiring per-user MFA

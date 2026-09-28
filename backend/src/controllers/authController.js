@@ -7,6 +7,7 @@ const { getRedisClient, isRedisReady } = require('../config/redisClient');
 const { get, set, del } = require('../cache');
 const { sendAdminAlert } = require('../services/alertService');
 const { maskEmail } = require('../utils/piiRedaction');
+const { logAudit } = require('../services/auditService');
 
 // ── Constant-time string comparison ───────────────────────────────────────────
 
@@ -620,6 +621,16 @@ async function handleRevokeSession(req, res) {
     await store.revokeFamily(sess.familyId, refreshTTL).catch(() => logger.debug('[AuthController] revokeFamily in handleRevokeSession missed'));
   }
   await store.delSession(sessionId).catch(() => logger.debug('[AuthController] delSession in handleRevokeSession missed'));
+  await logAudit({
+    schoolId: req.admin?.schoolId || 'system',
+    action: 'SESSION_REVOKED',
+    performedBy: req.auditContext?.performedBy,
+    ipAddress: req.auditContext?.ipAddress,
+    userAgent: req.auditContext?.userAgent,
+    targetId: sessionId,
+    targetType: 'session',
+    details: { revokedFamilyId: sess.familyId || null },
+  });
   return res.json({ message: 'Session revoked.' });
 }
 
@@ -711,6 +722,17 @@ async function handleChangePassword(req, res) {
   const cookieBase = { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'strict' };
   res.clearCookie(ACCESS_COOKIE, { ...cookieBase, path: '/' });
   res.clearCookie(REFRESH_COOKIE, { ...cookieBase, path: REFRESH_COOKIE_PATH });
+
+  await logAudit({
+    schoolId: req.admin?.schoolId || req.user?.schoolId || 'system',
+    action: 'PASSWORD_CHANGED',
+    performedBy: req.auditContext?.performedBy,
+    ipAddress: req.auditContext?.ipAddress,
+    userAgent: req.auditContext?.userAgent,
+    targetId: String(userId),
+    targetType: 'user',
+    details: { sessionsRevoked: true },
+  });
 
   return res.json({ message: 'Password changed. All sessions have been invalidated. Please log in again.' });
 }
