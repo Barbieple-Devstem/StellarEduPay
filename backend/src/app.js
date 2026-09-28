@@ -98,7 +98,6 @@ try {
 // Email bounce/complaint webhook must never fail open in production (#1537).
 require('./controllers/emailWebhookController').checkEmailWebhookConfigOnStartup();
 
-const morgan = require('morgan');
 const cookieParser = require('cookie-parser');
 const { parseAllowedOrigins } = require('./utils/corsOrigins');
 
@@ -120,14 +119,10 @@ app.set('trust proxy', config.TRUSTED_PROXY_HOPS);
 // validation, preventing filter bypass attacks.
 app.set('query parser', 'simple');
 
-// Redact secret-bearing query parameters from access logs (#1537): even
-// though webhook secrets are no longer accepted in the URL, a misconfigured
-// caller may still send ?token=… and it must not be written to the logs.
-morgan.token('url', (req) => {
-  const url = req.originalUrl || req.url;
-  return url.replace(/([?&](?:token|secret|signature)=)[^&]*/gi, '$1[REDACTED]');
-});
-app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
+// Request logging is handled by the structured requestLogger middleware
+// (see middleware/requestLogger.js) which provides PII redaction, query
+// string stripping, and IP hashing. Morgan is removed to avoid duplicate
+// logging and PII leakage.
 app.use(cors({
   origin: allowedOrigins,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
