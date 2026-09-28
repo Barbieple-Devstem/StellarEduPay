@@ -7,7 +7,7 @@ const { resolveSchool } = require('../middleware/schoolContext');
 const { requireAdminAuth } = require('../middleware/auth');
 
 router.use(resolveSchool);
-router.use(requireAdminAuth);
+router.use(requireSchoolAuth(['owner', 'staff', 'read_only']));
 
 router.get('/',              getAuditLogsEndpoint);
 router.get('/recent',        getRecentAuditLogsEndpoint);

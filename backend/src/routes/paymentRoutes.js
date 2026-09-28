@@ -182,20 +182,20 @@ router.post(
 // All remaining routes require school context
 router.use(resolveSchool);
 
-// Payment read endpoints now require authentication (Issue #1040)
-router.get("/", requireSchoolAuth(), getAllPayments);
-router.get("/summary", requireSchoolAuth(), getPaymentSummary);
-router.get("/accepted-assets", requireSchoolAuth(), getAcceptedAssets);
-router.get("/limits", requireSchoolAuth(), getPaymentLimitsEndpoint);
-router.get("/sync/status", requireSchoolAuth(), getSyncStatus);
-router.get("/events", requireSchoolAuth(), streamPaymentEvents);
-router.get("/overpayments", requireSchoolAuth(), getOverpayments);
-router.get("/suspicious", requireSchoolAuth(), getSuspiciousPayments);
-router.get("/pending", requireSchoolAuth(), getPendingPayments);
-router.get("/stuck", requireAdminAuth, getStuckPayments);
-router.get("/retry-queue", requireAdminAuth, getRetryQueue);
-router.get("/rates", requireSchoolAuth(), getExchangeRates);
-router.get("/dlq", requireSchoolAuth(), getDeadLetterJobs);
+// Payment read endpoints require authentication
+router.get("/", requireSchoolAuth(['owner', 'staff', 'read_only']), getAllPayments);
+router.get("/summary", requireSchoolAuth(['owner', 'staff', 'read_only']), getPaymentSummary);
+router.get("/accepted-assets", requireSchoolAuth(['owner', 'staff', 'read_only']), getAcceptedAssets);
+router.get("/limits", requireSchoolAuth(['owner', 'staff', 'read_only']), getPaymentLimitsEndpoint);
+router.get("/sync/status", requireSchoolAuth(['owner', 'staff', 'read_only']), getSyncStatus);
+router.get("/events", requireSchoolAuth(['owner', 'staff', 'read_only']), streamPaymentEvents);
+router.get("/overpayments", requireSchoolAuth(['owner', 'staff', 'read_only']), getOverpayments);
+router.get("/suspicious", requireSchoolAuth(['owner', 'staff', 'read_only']), getSuspiciousPayments);
+router.get("/pending", requireSchoolAuth(['owner', 'staff', 'read_only']), getPendingPayments);
+router.get("/stuck", requireSchoolAuth(['owner', 'staff']), getStuckPayments);
+router.get("/retry-queue", requireSchoolAuth(['owner', 'staff']), getRetryQueue);
+router.get("/rates", requireSchoolAuth(['owner', 'staff', 'read_only']), getExchangeRates);
+router.get("/dlq", requireSchoolAuth(['owner', 'staff']), getDeadLetterJobs);
 
 router.post(
   "/verify",
@@ -204,13 +204,12 @@ router.post(
   validateVerifyPayment,
   verifyPayment,
 );
-// syncLimiter runs after requireAdminAuth on purpose: it keys on
-// req.schoolId, which auth is what populates.
-router.post("/sync", strictLimiter, requireAdminAuth, syncLimiter, auditContext, syncAllPayments);
-router.post("/finalize", requireAdminAuth, auditContext, finalizePayments);
-router.post("/dlq/:id/retry", requireSchoolAuth(), retryDeadLetterJob);
+// syncLimiter runs after auth: it keys on req.schoolId populated by auth
+router.post("/sync", strictLimiter, requireSchoolAuth(['owner', 'staff']), syncLimiter, auditContext, syncAllPayments);
+router.post("/finalize", requireSchoolAuth(['owner', 'staff']), auditContext, finalizePayments);
+router.post("/dlq/:id/retry", requireSchoolAuth(['owner', 'staff']), retryDeadLetterJob);
 
-router.get("/balance/:studentId", validateStudentIdParam, requireSchoolAuth(), getStudentBalance);
+router.get("/balance/:studentId", validateStudentIdParam, requireSchoolAuth(['owner', 'staff', 'read_only']), getStudentBalance);
 router.get(
   "/instructions/:studentId",
   validateStudentIdParam,
@@ -218,27 +217,27 @@ router.get(
   getPaymentInstructions,
 );
 router.get("/receipt/:txHash", generateReceipt);
-router.get("/queue/:txHash", requireSchoolAuth(), getQueueJobStatus);
-router.get("/:studentId", validateStudentIdParam, requireSchoolAuth(), getStudentPayments);
+router.get("/queue/:txHash", requireSchoolAuth(['owner', 'staff', 'read_only']), getQueueJobStatus);
+router.get("/:studentId", validateStudentIdParam, requireSchoolAuth(['owner', 'staff', 'read_only']), getStudentPayments);
 
-router.post("/:paymentId/lock", requireSchoolAuth(), lockPaymentForUpdate);
-router.post("/:paymentId/unlock", requireSchoolAuth(), unlockPayment);
+router.post("/:paymentId/lock", requireSchoolAuth(['owner', 'staff']), lockPaymentForUpdate);
+router.post("/:paymentId/unlock", requireSchoolAuth(['owner', 'staff']), unlockPayment);
 
 // Registered BEFORE "/:txHash/status" on purpose: Express matches in order, so
 // the parameterised route would otherwise capture "bulk" as a txHash.
-router.patch("/bulk/status", requireAdminAuth, auditContext, bulkUpdatePaymentStatus);
-router.patch("/:txHash/status", requireAdminAuth, auditContext, updatePaymentStatus);
-router.patch("/:txHash/suspicion-review", requireAdminAuth, auditContext, reviewSuspiciousPayment);
-router.patch("/:txHash/correct-placeholder", requireAdminAuth, auditContext, correctPlaceholderPayment);
+router.patch("/bulk/status", requireSchoolAuth(['owner', 'staff']), auditContext, bulkUpdatePaymentStatus);
+router.patch("/:txHash/status", requireSchoolAuth(['owner', 'staff']), auditContext, updatePaymentStatus);
+router.patch("/:txHash/suspicion-review", requireSchoolAuth(['owner', 'staff']), auditContext, reviewSuspiciousPayment);
+router.patch("/:txHash/correct-placeholder", requireSchoolAuth(['owner', 'staff']), auditContext, correctPlaceholderPayment);
 
-router.post("/:txHash/refund", requireAdminAuth, auditContext, initiatePaymentRefund);
-router.post("/refunds/:refundId/approve", requireAdminAuth, auditContext, approvePaymentRefund);
-router.get("/:txHash/refunds", getPaymentRefunds);
-router.get("/refunds/school/list", requireAdminAuth, getSchoolRefunds);
+router.post("/:txHash/refund", requireSchoolAuth(['owner']), auditContext, initiatePaymentRefund);
+router.post("/refunds/:refundId/approve", requireSchoolAuth(['owner']), auditContext, approvePaymentRefund);
+router.get("/:txHash/refunds", requireSchoolAuth(['owner', 'staff', 'read_only']), getPaymentRefunds);
+router.get("/refunds/school/list", requireSchoolAuth(['owner', 'staff', 'read_only']), getSchoolRefunds);
 
 router.get("/verify/:receiptId", verifyReceipt);
 
-router.get("/reconciliation/reports", requireAdminAuth, getReconciliationReports);
-router.post("/reconciliation/report", requireAdminAuth, auditContext, generateSchoolReconciliationReport);
+router.get("/reconciliation/reports", requireSchoolAuth(['owner', 'staff', 'read_only']), getReconciliationReports);
+router.post("/reconciliation/report", requireSchoolAuth(['owner', 'staff']), auditContext, generateSchoolReconciliationReport);
 
 module.exports = router;

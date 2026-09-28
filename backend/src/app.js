@@ -47,6 +47,8 @@ const paymentPlanRoutes = require('./routes/paymentPlanRoutes');
 const auditRoutes = require('./routes/auditRoutes');
 const superAdminRoutes = require('./routes/superAdminRoutes');
 const cspReportRoutes = require('./routes/cspReportRoutes');
+const analyticsRoutes = require('./routes/analyticsRoutes');
+const userRoutes = require('./routes/userRoutes');
 
 const { registerPaymentSavedSubscribers } = require('./services/paymentSavedSubscribers');
 const { startPolling, stopPolling } = require('./services/transactionPollingService');
@@ -209,6 +211,7 @@ app.use('/api/audit', auditRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/superadmin', superAdminRoutes);
 app.use('/api/csp-report', cspReportRoutes);
+app.use('/api', userRoutes);
 app.get('/api/consistency', requireAdminAuth, runConsistencyCheck);
 app.get('/health', healthCheck);
 app.get('/health/live', healthLive);

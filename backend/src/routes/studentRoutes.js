@@ -36,30 +36,30 @@ const streamingCsvUpload = require('../middleware/streamingCsvUpload');
 
 router.use(resolveSchool);
 
-// Admin-only routes
-router.post('/', requireAdminAuth, validateRegisterStudent, registerStudent);
-router.post('/bulk', requireAdminAuth, bulkImportLimiter, express.json({ limit: '1mb' }), streamingCsvUpload(), bulkImportStudents);
-router.get('/', requireAdminAuth, validateGetAllStudentsQuery, getAllStudents);
-router.get('/export', requireAdminAuth, validateExportStudentsQuery, exportStudents);
+// Staff+ can manage students (owner, staff)
+router.post('/', requireSchoolAuth(['owner', 'staff']), validateRegisterStudent, registerStudent);
+router.post('/bulk', requireSchoolAuth(['owner', 'staff']), bulkImportLimiter, express.json({ limit: '1mb' }), streamingCsvUpload(), bulkImportStudents);
+router.get('/', requireSchoolAuth(['owner', 'staff', 'read_only']), validateGetAllStudentsQuery, getAllStudents);
+router.get('/export', requireSchoolAuth(['owner', 'staff', 'read_only']), validateExportStudentsQuery, exportStudents);
 
-// Authentication-required routes (Issue #1040: all student financial data requires auth)
-router.get('/summary', requireSchoolAuth(), getPaymentSummary);
-router.get('/overdue', requireSchoolAuth(), getOverdueStudents);
+// All authenticated users can view summaries
+router.get('/summary', requireSchoolAuth(['owner', 'staff', 'read_only']), getPaymentSummary);
+router.get('/overdue', requireSchoolAuth(['owner', 'staff', 'read_only']), getOverdueStudents);
 
 // Public routes
 router.get('/public/:studentId', publicStudentLimiter, validateStudentIdParam, getPublicStudentInfo);
 router.get('/:studentId', requireAdminAuth, validateStudentIdParam, getStudent);
 // updateStudent performs a partial update, so PATCH is the accurate verb (issue
 // #1576); PUT is kept as an alias since the frontend previously relied on it.
-router.patch('/:studentId', requireAdminAuth, validateStudentIdParam, auditContext, updateStudent);
-router.put('/:studentId', requireAdminAuth, validateStudentIdParam, auditContext, updateStudent);
-router.delete('/:studentId', requireAdminAuth, validateStudentIdParam, auditContext, deleteStudent);
-router.post('/:studentId/restore', requireAdminAuth, validateStudentIdParam, auditContext, restoreStudent);
-router.get('/:studentId/payments/audit', requireAdminAuth, validateStudentIdParam, getDeletedStudentPayments);
-router.post('/:studentId/reset-payment', requireAdminAuth, validateStudentIdParam, resetPayment);
-router.post('/:studentId/reconcile', requireAdminAuth, validateStudentIdParam, reconcileStudent);
-router.post('/:studentId/reminders/resubscribe', requireAdminAuth, validateStudentIdParam, resubscribeReminders);
-router.get('/:studentId/fee-history', requireAdminAuth, validateStudentIdParam, validateGetStudentFeeHistoryQuery, getFeeHistory);
-router.post('/:studentId/credit-adjustments', requireAdminAuth, validateStudentIdParam, auditContext, adjustStudentCredit);
+router.patch('/:studentId', requireSchoolAuth(['owner', 'staff']), validateStudentIdParam, auditContext, updateStudent);
+router.put('/:studentId', requireSchoolAuth(['owner', 'staff']), validateStudentIdParam, auditContext, updateStudent);
+router.delete('/:studentId', requireSchoolAuth(['owner', 'staff']), validateStudentIdParam, auditContext, deleteStudent);
+router.post('/:studentId/restore', requireSchoolAuth(['owner', 'staff']), validateStudentIdParam, auditContext, restoreStudent);
+router.get('/:studentId/payments/audit', requireSchoolAuth(['owner', 'staff', 'read_only']), validateStudentIdParam, getDeletedStudentPayments);
+router.post('/:studentId/reset-payment', requireSchoolAuth(['owner', 'staff']), validateStudentIdParam, resetPayment);
+router.post('/:studentId/reconcile', requireSchoolAuth(['owner', 'staff']), validateStudentIdParam, reconcileStudent);
+router.post('/:studentId/reminders/resubscribe', requireSchoolAuth(['owner', 'staff']), validateStudentIdParam, resubscribeReminders);
+router.get('/:studentId/fee-history', requireSchoolAuth(['owner', 'staff', 'read_only']), validateStudentIdParam, validateGetStudentFeeHistoryQuery, getFeeHistory);
+router.post('/:studentId/credit-adjustments', requireSchoolAuth(['owner', 'staff']), validateStudentIdParam, auditContext, adjustStudentCredit);
 
 module.exports = router;
