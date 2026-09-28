@@ -61,7 +61,7 @@ const {
 const { resolveSchool } = require('../middleware/schoolContext');
 const idempotencyMiddleware = require('../middleware/idempotency');
 const { auditContext } = require('../middleware/auditContext');
-const { strictLimiter, verifyLimiter } = require('../middleware/rateLimiter');
+const { strictLimiter, verifyLimiter, syncLimiter } = require('../middleware/rateLimiter');
 
 const router = express.Router();
 
@@ -207,7 +207,7 @@ router.post(
 // syncLimiter runs after auth: it keys on req.schoolId populated by auth
 router.post("/sync", strictLimiter, requireSchoolAuth(['owner', 'staff']), syncLimiter, auditContext, syncAllPayments);
 router.post("/finalize", requireSchoolAuth(['owner', 'staff']), auditContext, finalizePayments);
-router.post("/dlq/:id/retry", requireSchoolAuth(['owner', 'staff']), retryDeadLetterJob);
+router.post("/dlq/:id/retry", requireSchoolAuth(['owner', 'staff']), auditContext, retryDeadLetterJob);
 
 router.get("/balance/:studentId", validateStudentIdParam, requireSchoolAuth(['owner', 'staff', 'read_only']), getStudentBalance);
 router.get(
@@ -220,8 +220,8 @@ router.get("/receipt/:txHash", generateReceipt);
 router.get("/queue/:txHash", requireSchoolAuth(['owner', 'staff', 'read_only']), getQueueJobStatus);
 router.get("/:studentId", validateStudentIdParam, requireSchoolAuth(['owner', 'staff', 'read_only']), getStudentPayments);
 
-router.post("/:paymentId/lock", requireSchoolAuth(['owner', 'staff']), lockPaymentForUpdate);
-router.post("/:paymentId/unlock", requireSchoolAuth(['owner', 'staff']), unlockPayment);
+router.post("/:paymentId/lock", requireSchoolAuth(['owner', 'staff']), auditContext, lockPaymentForUpdate);
+router.post("/:paymentId/unlock", requireSchoolAuth(['owner', 'staff']), auditContext, unlockPayment);
 
 // Registered BEFORE "/:txHash/status" on purpose: Express matches in order, so
 // the parameterised route would otherwise capture "bulk" as a txHash.

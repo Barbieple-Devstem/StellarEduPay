@@ -405,6 +405,21 @@ async function handleLogin(req, res) {
         User.findByIdAndUpdate(user._id, { $set: { [`mfaBackupCodes.${bcIdx}.used`]: true } }).catch(() => logger.debug('[AuthController] mark user backup code used missed'));
       }
     } else if (user.schoolId) {
+      // #1553 — The old shared-secret path (school.mfaSecret) is removed.
+      // A single TOTP secret shared across all staff is a known-bad pattern:
+      // departing employees retain a valid factor, backup codes are shared,
+      // and MFA events cannot be attributed to an individual in the audit trail.
+      //
+      // Replacement: school.requireMfa is a POLICY flag. When true, users of
+      // that school must have personal MFA enrolled. If they do not, the login
+      // succeeds but they receive a restricted mfaSetupPending token that only
+      // allows the /mfa/user/* setup endpoints — forcing enrolment before any
+      // other action. The actual MFA challenge happens in the user.mfaEnabled
+      // branch above once enrolment is complete.
+      //
+      // Legacy transition: we still read the school document so that the
+      // mfaAlreadyEnabled check below can consider school.requireMfa, but we
+      // no longer verify a TOTP code against a shared school secret.
       const School = require('../models/schoolModel');
       let school;
       try {
@@ -413,25 +428,8 @@ async function handleLogin(req, res) {
         school = null;
       }
       mfaSchool = school;
-
-      if (school?.mfaEnabled && school.mfaSecret) {
-        if (!mfaCode) {
-          return res.status(200).json({ requiresMfa: true });
-        }
-        const totpValid = verifyTotpCode(school.mfaSecret, mfaCode);
-        if (!totpValid) {
-          const bcIdx = verifyBackupCode(school.mfaBackupCodes, mfaCode);
-          if (bcIdx === -1) {
-            recordLoginFailure(loginId).catch(() => logger.debug('[AuthController] recordLoginFailure missed (invalid MFA school)'));
-            return res.status(401).json({ error: 'Invalid MFA code.', code: 'INVALID_MFA_CODE' });
-          }
-          school.mfaBackupCodes[bcIdx].used = true;
-          School.findOneAndUpdate(
-            { schoolId: user.schoolId },
-            { $set: { [`mfaBackupCodes.${bcIdx}.used`]: true } }
-          ).catch(() => logger.debug('[AuthController] mark school backup code used missed'));
-        }
-      }
+      // No TOTP challenge against a shared school secret — each user uses their
+      // own per-user secret (handled in the user.mfaEnabled branch above).
     }
   }
 
@@ -442,15 +440,25 @@ async function handleLogin(req, res) {
   const accessTTL  = parseTTL('JWT_ACCESS_TOKEN_TTL', 8 * 3600);
   const refreshTTL = parseTTL('JWT_REFRESH_TOKEN_TTL', 30 * 86400);
 
-  // #1356 — When REQUIRE_MFA is enabled, an admin with no MFA configured (on
-  // their own account or their school's) gets a restricted token: the auth
-  // middleware only lets it reach the MFA setup endpoints until MFA is
-  // enabled, closing the gap where a compromised password alone grants full
-  // access. See requireSchoolAuth's mfaSetupPending check in middleware/auth.js.
-  const mfaAlreadyEnabled = Boolean(
-    (user.mfaEnabled && user.mfaSecret) || (mfaSchool?.mfaEnabled && mfaSchool.mfaSecret)
-  );
-  const mfaSetupPending = process.env.REQUIRE_MFA === 'true' && !mfaAlreadyEnabled;
+  // #1553 / #1356 — Determine whether MFA setup should be enforced.
+  //
+  // mfaSetupPending is true when EITHER:
+  //   (a) the global REQUIRE_MFA env flag is set and the user has no personal MFA, OR
+  //   (b) the user's school has requireMfa:true and the user has no personal MFA.
+  //
+  // In that case we issue a restricted token: the auth middleware only allows
+  // it to reach the /mfa/user/* setup endpoints until the user enrolls their
+  // own TOTP secret.  This closes the gap where a compromised password alone
+  // grants full access.
+  //
+  // The old school.mfaEnabled / school.mfaSecret check is intentionally removed
+  // (issue #1553). A shared school-level secret is no longer a valid MFA signal.
+  const userHasPersonalMfa = Boolean(user.mfaEnabled && user.mfaSecret);
+  const schoolRequiresMfa  = Boolean(mfaSchool?.requireMfa);
+  const mfaAlreadyEnabled  = userHasPersonalMfa;
+  const mfaSetupPending =
+    (!mfaAlreadyEnabled) &&
+    (process.env.REQUIRE_MFA === 'true' || schoolRequiresMfa);
 
   const jwtPayload = {
     role:     'user',
