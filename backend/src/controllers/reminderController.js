@@ -19,6 +19,7 @@ const { generateUnsubscribeToken, verifyUnsubscribeToken } = require('../utils/u
 const config = require('../config');
 const { escapeHtml } = require('../utils/escapeHtml');
 const logger = require('../utils/logger').child('ReminderController');
+const { logAudit } = require('../services/auditService');
 
 const { REMINDER_COOLDOWN_HOURS, REMINDER_MAX_COUNT, JWT_SECRET } = config;
 
@@ -316,6 +317,17 @@ async function resubscribeReminders(req, res, next) {
     if (!student) {
       return res.status(404).json({ error: 'Student not found', code: 'NOT_FOUND' });
     }
+
+    await logAudit({
+      schoolId,
+      action: 'STUDENT_REMINDER_RESUBSCRIBED',
+      performedBy: req.auditContext?.performedBy,
+      ipAddress: req.auditContext?.ipAddress,
+      userAgent: req.auditContext?.userAgent,
+      targetId: studentId,
+      targetType: 'student',
+      details: { reminderOptOut: false },
+    });
 
     res.json({ studentId: student.studentId, name: student.name, reminderOptOut: student.reminderOptOut });
   } catch (err) {

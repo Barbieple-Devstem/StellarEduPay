@@ -878,6 +878,33 @@ async function resetPayment(req, res, next) {
       });
     }
 
+    await logAudit({
+      schoolId,
+      action: 'STUDENT_PAYMENT_RESET',
+      performedBy: req.auditContext?.performedBy,
+      ipAddress: req.auditContext?.ipAddress,
+      userAgent: req.auditContext?.userAgent,
+      targetId: studentId,
+      targetType: 'student',
+      details: {
+        feePaid: student.feePaid,
+        totalPaid: student.totalPaid,
+        remainingBalance: student.remainingBalance,
+        paymentsDeleted: deletePayments,
+      },
+    });
+
+    await logAudit({
+      schoolId,
+      action: 'STUDENT_PAYMENT_RESET',
+      performedBy: req.auditContext?.performedBy,
+      ipAddress: req.auditContext?.ipAddress,
+      userAgent: req.auditContext?.userAgent,
+      targetId: studentId,
+      targetType: 'student',
+      details: { feePaid: student.feePaid, totalPaid: student.totalPaid, remainingBalance: student.remainingBalance, paymentsDeleted: deletePayments },
+    });
+
     res.json({
       message: 'Payment status reset successfully',
       student: {
@@ -930,6 +957,17 @@ async function reconcileStudent(req, res, next) {
       student.feePaid = computedTotal >= student.feeAmount;
       await student.save();
 
+      await logAudit({
+        schoolId,
+        action: 'STUDENT_RECONCILED',
+        performedBy: req.auditContext?.performedBy,
+        ipAddress: req.auditContext?.ipAddress,
+        userAgent: req.auditContext?.userAgent,
+        targetId: studentId,
+        targetType: 'student',
+        details: { reconciled: true, storedTotal, computedTotal, diff: computedTotal - storedTotal },
+      });
+
       return res.json({
         studentId,
         reconciled: true,
@@ -940,6 +978,17 @@ async function reconcileStudent(req, res, next) {
         remainingBalance: student.remainingBalance,
       });
     }
+
+    await logAudit({
+      schoolId,
+      action: 'STUDENT_RECONCILED',
+      performedBy: req.auditContext?.performedBy,
+      ipAddress: req.auditContext?.ipAddress,
+      userAgent: req.auditContext?.userAgent,
+      targetId: studentId,
+      targetType: 'student',
+      details: { reconciled: false, storedTotal, computedTotal, diff: 0 },
+    });
 
     res.json({
       studentId,

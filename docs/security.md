@@ -395,3 +395,99 @@ File logs are automatically rotated and deleted by `winston-daily-rotate-file`.
 - [Data Privacy and Retention Policy](./privacy.md) — full data retention and data subject rights
 - [Audit Service](../backend/src/services/auditService.js) — audit log implementation
 - [PII Redaction Utilities](../backend/src/utils/piiRedaction.js) — redaction functions
+
+---
+
+## Audited Action Catalogue (#1554)
+
+Every authenticated, state-changing request passes through `auditContext` middleware
+and calls `logAudit` in the handler. All entries land in the tamper-evident
+`audit_log` MongoDB collection with `performedBy`, `ipAddress`, `userAgent`,
+`targetId`, `targetType`, and a `details` payload.
+
+An automated regression test (`tests/issue-1554-audit-context-coverage.test.js`)
+walks the Express router stack and fails if any non-GET authenticated route is
+missing `auditContext`.
+
+### Student management
+
+| Action | Trigger |
+|--------|---------|
+| `STUDENT_REGISTERED` | `POST /api/students` |
+| `STUDENT_UPDATED` | `PATCH /api/students/:studentId` |
+| `STUDENT_DELETED` | `DELETE /api/students/:studentId` |
+| `STUDENT_RESTORED` | `POST /api/students/:studentId/restore` |
+| `STUDENT_BULK_IMPORTED` | `POST /api/students/bulk` |
+| `STUDENT_PAYMENT_RESET` | `POST /api/students/:studentId/reset-payment` |
+| `STUDENT_RECONCILED` | `POST /api/students/:studentId/reconcile` |
+| `STUDENT_REMINDER_RESUBSCRIBED` | `POST /api/students/:studentId/reminders/resubscribe` |
+| `STUDENT_CREDIT_ADJUSTED` | `POST /api/students/:studentId/credit-adjustments` |
+
+### Payments
+
+| Action | Trigger |
+|--------|---------|
+| `PAYMENT_SYNC` | `POST /api/payments/sync` |
+| `PAYMENT_FINALIZED` | `POST /api/payments/finalize` |
+| `PAYMENT_STATUS_UPDATED` | `PATCH /api/payments/:txHash/status` |
+| `PAYMENT_BULK_STATUS_UPDATED` | `PATCH /api/payments/bulk/status` |
+| `PAYMENT_LOCKED` | `POST /api/payments/:paymentId/lock` |
+| `PAYMENT_UNLOCKED` | `POST /api/payments/:paymentId/unlock` |
+| `PAYMENT_DLQ_RETRIED` | `POST /api/payments/dlq/:id/retry` |
+| `PAYMENT_SUSPICION_REVIEWED` | `PATCH /api/payments/:txHash/suspicion-review` |
+| `PAYMENT_PLACEHOLDER_CORRECTED` | `PATCH /api/payments/:txHash/correct-placeholder` |
+| `PAYMENT_REFUND_INITIATED` | `POST /api/payments/:txHash/refund` |
+| `PAYMENT_REFUND_APPROVED` | `POST /api/payments/refunds/:refundId/approve` |
+| `RECONCILIATION_REPORT_GENERATED` | `POST /api/payments/reconciliation/report` |
+
+### Fee adjustments
+
+| Action | Trigger |
+|--------|---------|
+| `FEE_ADJUSTMENT_CREATED` | `POST /api/fee-adjustments` |
+| `FEE_ADJUSTMENT_UPDATED` | `PUT /api/fee-adjustments/:id` |
+| `FEE_ADJUSTMENT_DELETED` | `DELETE /api/fee-adjustments/:id` |
+| `FEE_ADJUSTMENT_DRY_RUN` | `POST /api/fee-adjustments/dry-run` |
+| `FEE_ADJUSTMENT_APPLIED` | `POST /api/fee-adjustments/:id/apply` |
+
+### Retry queue
+
+| Action | Trigger |
+|--------|---------|
+| `RETRY_QUEUE_JOB_RETRIED` | `POST /api/retry-queue/jobs/:jobId/retry` |
+| `RETRY_QUEUE_JOB_DELETED` | `DELETE /api/retry-queue/jobs/:jobId` |
+| `RETRY_QUEUE_PAUSED` | `POST /api/retry-queue/pause` |
+| `RETRY_QUEUE_RESUMED` | `POST /api/retry-queue/resume` |
+| `RETRY_QUEUE_TRANSACTION_QUEUED` | `POST /api/retry-queue/queue` |
+
+### Email suppression
+
+| Action | Trigger |
+|--------|---------|
+| `EMAIL_SUPPRESSION_ADDED` | `POST /api/email/suppressions` |
+| `EMAIL_SUPPRESSION_REMOVED` | `DELETE /api/email/suppressions/:email` |
+
+### Authentication and MFA
+
+| Action | Trigger |
+|--------|---------|
+| `PASSWORD_CHANGED` | `POST /api/auth/change-password` |
+| `SESSION_REVOKED` | `DELETE /api/auth/sessions/:sessionId` |
+| `MFA_ENABLED` | `POST /api/auth/mfa/setup` → `POST /api/auth/mfa/verify` |
+| `MFA_DISABLED` | `POST /api/auth/mfa/disable` |
+| `MFA_BACKUP_CODES_REGENERATED` | `POST /api/auth/mfa/backup-codes/regenerate` |
+| `USER_MFA_SETUP_INITIATED` | `POST /api/auth/mfa/user/setup` |
+| `USER_MFA_ENABLED` | `POST /api/auth/mfa/user/verify` |
+| `USER_MFA_DISABLED` | `POST /api/auth/mfa/user/disable` |
+
+### Public / intentionally un-audited endpoints
+
+| Endpoint | Reason |
+|----------|--------|
+| `POST /api/auth/login` | No actor yet; login outcome logged by the controller |
+| `POST /api/auth/refresh` | Token rotation; no state mutation |
+| `POST /api/auth/logout` | Session teardown; no persistent state change |
+| `POST /api/payments/intent` | Unauthenticated caller |
+| `POST /api/payments/submit` | Unauthenticated caller |
+| `POST /api/payments/verify` | Unauthenticated caller |
+| `POST /api/email/webhooks/:provider` | Provider-authenticated (SNS/SendGrid signature) |

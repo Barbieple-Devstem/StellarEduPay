@@ -20,6 +20,7 @@ const {
   verifySendGridSignature,
 } = require('../services/email/webhookVerification');
 const logger = require('../utils/logger').child('EmailWebhook');
+const { logAudit } = require('../services/auditService');
 
 // ── Authentication — Issue #1537 ─────────────────────────────────────────────
 //
@@ -287,11 +288,31 @@ async function addSuppression(req, res) {
     return res.status(400).json({ error: 'email is required', code: 'VALIDATION_ERROR' });
   }
   const record = await suppressionList.suppress(email, { reason, bounceType, source: 'admin', detail });
+  await logAudit({
+    schoolId: req.schoolId || 'system',
+    action: 'EMAIL_SUPPRESSION_ADDED',
+    performedBy: req.auditContext?.performedBy,
+    ipAddress: req.auditContext?.ipAddress,
+    userAgent: req.auditContext?.userAgent,
+    targetId: email,
+    targetType: 'emailAddress',
+    details: { reason, bounceType, detail },
+  });
   return res.status(201).json(record);
 }
 
 async function removeSuppression(req, res) {
   const removed = await suppressionList.remove(req.params.email);
+  await logAudit({
+    schoolId: req.schoolId || 'system',
+    action: 'EMAIL_SUPPRESSION_REMOVED',
+    performedBy: req.auditContext?.performedBy,
+    ipAddress: req.auditContext?.ipAddress,
+    userAgent: req.auditContext?.userAgent,
+    targetId: req.params.email,
+    targetType: 'emailAddress',
+    details: { removed },
+  });
   return res.status(200).json({ removed });
 }
 

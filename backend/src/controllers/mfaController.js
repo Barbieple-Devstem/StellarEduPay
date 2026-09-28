@@ -325,6 +325,17 @@ async function setupUserMfa(req, res) {
     user.mfaBackupCodes = backupCodes.map((c) => ({ hash: hashBackupCode(c), used: false }));
     await user.save();
 
+    await logAudit({
+      schoolId: user.schoolId || 'system',
+      action: 'USER_MFA_SETUP_INITIATED',
+      performedBy: req.auditContext?.performedBy || user.email,
+      ipAddress: req.auditContext?.ipAddress,
+      userAgent: req.auditContext?.userAgent,
+      targetId: String(userId),
+      targetType: 'user',
+      details: { mfaEnabled: false, setupStarted: true },
+    });
+
     return res.json({ secret: totpSecret, qrCode, backupCodes });
   } catch (err) {
     logger.error('[MFA] setupUserMfa error', { error: err.message });
