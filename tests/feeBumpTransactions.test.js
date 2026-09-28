@@ -1,5 +1,12 @@
 'use strict';
 
+// ── Env vars must be set BEFORE any backend module is required ────────────────
+process.env.MONGO_URI               = process.env.MONGO_URI               || 'mongodb://127.0.0.1:27017/test';
+process.env.JWT_SECRET              = process.env.JWT_SECRET              || 'test-jwt-secret-for-feebump-tests';
+process.env.SCHOOL_WALLET_ADDRESS   = process.env.SCHOOL_WALLET_ADDRESS   || 'GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5';
+process.env.RECEIPT_SIGNATURE_SECRET = process.env.RECEIPT_SIGNATURE_SECRET || 'test-receipt-secret-feebump';
+process.env.STELLAR_NETWORK         = process.env.STELLAR_NETWORK         || 'testnet';
+
 /**
  * Tests for fee-bump transaction handling (issue #1556).
  *
@@ -23,7 +30,7 @@
  * has neither), causing fee-bumped payments to be silently dropped.
  */
 
-const mongoose = require('mongoose');
+const mongoose = require('../backend/node_modules/mongoose');
 const { MongoMemoryServer } = require('mongodb-memory-server');
 const Student = require('../backend/src/models/studentModel');
 const Payment = require('../backend/src/models/paymentModel');
@@ -32,19 +39,19 @@ const School = require('../backend/src/models/schoolModel');
 
 let mongoServer;
 const schoolId = 'SCH-TEST-FB-001';
-const walletAddress = 'GD校SCHOOL1234567890ABCDEFG';
+const walletAddress = 'GAHZQLURQFZGUHVG5U53OO7S5U6CV75RTYWVVA4K2U3O6NCC7BBE5VH6';
 const TEST_DB = 'fee_bump_tx_test';
 const USE_EXTERNAL_MONGO = !!process.env.MONGO_URI;
 
 beforeAll(async () => {
   if (USE_EXTERNAL_MONGO) {
     const baseUri = process.env.MONGO_URI.replace(/\/[^/?]+(\?|$)/, `/${TEST_DB}$1`);
-    await mongoose.connect(baseUri);
+    await mongoose.connect(baseUri, { serverSelectionTimeoutMS: 15000 });
   } else {
     mongoServer = await MongoMemoryServer.create();
     await mongoose.connect(mongoServer.getUri());
   }
-});
+}, 30000);
 
 afterAll(async () => {
   await mongoose.connection.db.dropDatabase();
@@ -53,9 +60,10 @@ afterAll(async () => {
 });
 
 beforeEach(async () => {
-  await Student.deleteMany({});
-  await Payment.deleteMany({});
-  await FeeStructure.deleteMany({});
+  await Student.deleteMany({ schoolId: schoolId });
+  await Payment.deleteMany({ schoolId: schoolId });
+  await FeeStructure.deleteMany({ schoolId: schoolId });
+  // School model is not tenant-scoped (no tenantScope plugin), no filter restriction needed
   await School.deleteMany({});
 
   await School.create({
@@ -79,7 +87,7 @@ beforeEach(async () => {
     class: 'Grade 5A',
     feeAmount: 250,
   });
-});
+}, 30000);
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -227,27 +235,31 @@ describe('extractValidPayment — fee-bump transactions (issue #1556)', () => {
 
 describe('verifyTransaction — fee-bump transactions (issue #1556)', () => {
   let stellarConfig;
+  let origTransactions;
 
   beforeEach(() => {
     stellarConfig = require('../backend/src/config/stellarConfig');
+    origTransactions = stellarConfig.server.transactions;
   });
 
   afterEach(() => {
-    jest.restoreAllMocks();
+    // Restore the original transactions function after each test
+    stellarConfig.server.transactions = origTransactions;
   });
 
   function mockServer(txFixture) {
-    jest.spyOn(stellarConfig, 'server', 'get').mockReturnValue({
-      transactions: () => ({
-        transaction: () => ({
-          call: async () => txFixture,
-        }),
+    // Mutate the existing server object so the destructured binding in
+    // stellarService.js also sees the change (replaceProperty would not work
+    // because stellarService already holds a reference to server, not stellarConfig)
+    stellarConfig.server.transactions = () => ({
+      transaction: () => ({
+        call: async () => txFixture,
       }),
-      ledgers: () => ({
-        order: () => ({
-          limit: () => ({
-            call: async () => ({ records: [{ sequence: 100 }] }),
-          }),
+    });
+    stellarConfig.server.ledgers = () => ({
+      order: () => ({
+        limit: () => ({
+          call: async () => ({ records: [{ sequence: 100 }] }),
         }),
       }),
     });

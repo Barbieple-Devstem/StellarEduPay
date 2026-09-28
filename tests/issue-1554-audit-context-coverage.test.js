@@ -16,6 +16,16 @@
  *   - The endpoint uses its own documented audit mechanism (provider webhooks)
  */
 
+// ── Env vars must be set BEFORE any backend module is required ────────────────
+// Route files transitively load controllers which load config/index.js, which
+// validates required env vars on require(). Set them here so the module graph
+// can resolve without errors.
+process.env.MONGO_URI               = process.env.MONGO_URI               || 'mongodb://127.0.0.1:27017/test';
+process.env.JWT_SECRET              = process.env.JWT_SECRET              || 'test-jwt-secret-for-audit-coverage-tests';
+process.env.SCHOOL_WALLET_ADDRESS   = process.env.SCHOOL_WALLET_ADDRESS   || 'GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5';
+process.env.RECEIPT_SIGNATURE_SECRET = process.env.RECEIPT_SIGNATURE_SECRET || 'test-receipt-secret-for-audit-coverage';
+process.env.STELLAR_NETWORK         = process.env.STELLAR_NETWORK         || 'testnet';
+
 const { auditContext } = require('../backend/src/middleware/auditContext');
 
 // ── Public / intentionally un-audited endpoints (allow-list) ─────────────────
