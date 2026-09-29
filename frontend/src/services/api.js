@@ -1,10 +1,12 @@
 import axios from "axios";
 import { createRefreshHandler } from "./authRefresh";
+import { API_BASE_URL, apiUrl } from "../config/apiBase";
 
 const TIMEOUT_MS = parseInt(process.env.NEXT_PUBLIC_REQUEST_TIMEOUT_MS || "15000", 10);
 
 const api = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api",
+  // #1578 — one configuration value (see config/apiBase.js) drives every call.
+  baseURL: API_BASE_URL,
   timeout: TIMEOUT_MS,
   withCredentials: true,
 });
@@ -97,11 +99,8 @@ export const deleteFeeStructure = (className) => api.delete(`/fees/${encodeURICo
 
 // Reports
 export const getReport = (params = {}) => api.get("/reports", { params });
-export const getReportCsvUrl = (params = {}) => {
-  const base = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api";
-  const query = new URLSearchParams({ ...params, format: "csv" }).toString();
-  return `${base}/reports?${query}`;
-};
+export const getReportCsvUrl = (params = {}) =>
+  apiUrl("/reports", { ...params, format: "csv" });
 
 // Currency conversion
 export const getConversionRates = () => api.get("/payments/rates");

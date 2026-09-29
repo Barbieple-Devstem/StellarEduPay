@@ -8,8 +8,14 @@ COPY package*.json ./
 RUN npm ci
 
 # NEXT_PUBLIC_* vars are inlined at build time — must be available here
-ARG NEXT_PUBLIC_API_URL=http://localhost:5000/api
+# #1578 — default to the same-origin relative base; the Next rewrite below
+# proxies /api/* to BACKEND_PROXY_TARGET so auth cookies stay first-party.
+ARG NEXT_PUBLIC_API_URL=/api
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+
+# Backend origin for the /api rewrite in next.config.js (baked in at build).
+ARG BACKEND_PROXY_TARGET=http://backend:5000
+ENV BACKEND_PROXY_TARGET=$BACKEND_PROXY_TARGET
 
 ARG NEXT_PUBLIC_STELLAR_NETWORK=testnet
 ENV NEXT_PUBLIC_STELLAR_NETWORK=$NEXT_PUBLIC_STELLAR_NETWORK
