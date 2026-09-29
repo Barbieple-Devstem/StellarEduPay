@@ -13,12 +13,7 @@ ENV NODE_ENV=production
 
 WORKDIR /app
 
-# Install dependencies first (layer cache)
 COPY package*.json ./
-RUN npm ci --omit=dev
-
-# Copy source
-COPY src/ ./src/
 
 # Migrations and the deploy-time migration CLI must be in the image.
 COPY migrations/ ./migrations/
@@ -29,7 +24,7 @@ RUN chown -R appuser:appgroup /app
 
 USER appuser
 
-EXPOSE 5000
+COPY . .
 
 # Use a tiny Node one-liner instead of curl: same result, no extra package.
 # Checks /health/live (process-alive probe, no external calls).
