@@ -101,10 +101,13 @@ export const deleteFeeStructure = (className) => api.delete(`/fees/${encodeURICo
 
 // Reports
 export const getReport = (params = {}) => api.get("/reports", { params });
+// Issue #1577 — getReportCsvUrl now returns a relative URL so it goes through
+// the Next.js /api/* rewrite proxy. This keeps SameSite=Strict auth cookies
+// first-party in split-host deployments. Callers that need a direct link can
+// still construct an absolute URL by prepending NEXT_PUBLIC_API_URL.
 export const getReportCsvUrl = (params = {}) => {
-  const base = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api";
   const query = new URLSearchParams({ ...params, format: "csv" }).toString();
-  return `${base}/reports?${query}`;
+  return `/api/reports?${query}`;
 };
 
 // Currency conversion
