@@ -124,10 +124,12 @@ export const getPaymentRefunds = (txHash) => api.get(`/payments/${txHash}/refund
 export const getSchoolRefunds = (params = {}) => api.get("/payments/refunds/school/list", { params });
 
 // Audit logs
+// Issue #1575 — backend mounts audit routes at /api/audit; the frontend
+// previously called /api/audit-logs which always returned 404.
 export const getRecentAuditLogs = (limit = 10) =>
-  api.get("/audit-logs/recent", { params: { limit } });
+  api.get("/audit/recent", { params: { limit } });
 export const getAuditLogs = (params = {}) =>
-  api.get("/audit-logs", { params });
+  api.get("/audit", { params });
 
 // Fee adjustment rules
 export const getFeeAdjustmentRules = (schoolId) =>
