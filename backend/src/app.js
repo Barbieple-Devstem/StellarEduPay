@@ -70,8 +70,8 @@ const { startOutboxDispatcher, stopOutboxDispatcher } = require('./services/outb
 const { startReconciliationReportScheduler, stopReconciliationReportScheduler } = require('./services/reconciliationReportScheduler');
 const { startJobRecoveryScheduler, stopJobRecoveryScheduler } = require('./services/jobRecoveryScheduler');
 const { startWorker: startReportQueueWorker, stopWorker: stopReportQueueWorker } = require('./services/reportQueueService');
-const { close: closeReportCacheInvalidator } = require('./services/reportCacheInvalidator');
 const { closeQueue } = require('./queue/transactionQueue');
+const { closeRedisClients } = require('./config/redisClient');
 const bullMQRetryService = require('./services/bullMQRetryService');
 const { initializeRetryQueue, setupMonitoring } = require('./config/retryQueueSetup');
 const { notFoundHandler, globalErrorHandler } = require('./middleware/errorHandler');
@@ -479,15 +479,16 @@ async function shutdown(signal) {
     await stopAcceptingNewWork();
     await drainWorkers();
     await notifySSEClients();
-    await closeQueues();
   } catch (err) {
     logger.error('Error during shutdown', { error: err.message });
   }
 
-  // (1) Stop accepting new connections; (2) wait for in-flight requests to finish;
-  // (3) only then close the database connection.
+  // Keep shared clients alive until in-flight requests finish, then close queue
+  // resources, Redis, and MongoDB in ownership order.
   server.close(async () => {
     try {
+      await closeQueues();
+      await closeRedisClients();
       await mongoose.disconnect();
       logger.info('MongoDB disconnected — clean exit');
       clearTimeout(forceExitTimer);
