@@ -50,6 +50,7 @@ const cspReportRoutes = require('./routes/cspReportRoutes');
 const analyticsRoutes = require('./routes/analyticsRoutes');
 const userRoutes = require('./routes/userRoutes');
 const academicPeriodRoutes = require('./routes/academicPeriodRoutes');
+const anchorRoutes = require('./routes/anchorRoutes');
 
 const { registerPaymentSavedSubscribers } = require('./services/paymentSavedSubscribers');
 const { startPolling, stopPolling } = require('./services/transactionPollingService');
@@ -215,6 +216,7 @@ app.use('/api/superadmin', superAdminRoutes);
 app.use('/api/csp-report', cspReportRoutes);
 app.use('/api', userRoutes);
 app.use('/api/academic-periods', academicPeriodRoutes);
+app.use('/api/anchor', anchorRoutes);
 app.get('/api/consistency', requireAdminAuth, runConsistencyCheck);
 app.get('/health', healthCheck);
 app.get('/health/live', healthLive);

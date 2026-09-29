@@ -164,3 +164,15 @@ export const updateInstallment = (studentId, installmentIndex, data) =>
   api.patch(`/payment-plans/${studentId}/installment/${installmentIndex}`, data);
 export const cancelPaymentPlan = (studentId) =>
   api.delete(`/payment-plans/${studentId}`);
+
+// ── SEP-24 Anchor payments (Issue #1571) ──────────────────────────────────────
+export const listAnchors = () =>
+  api.get('/anchor/anchors');
+
+export const initiateAnchorDeposit = (data) =>
+  api.post('/anchor/initiate', data);
+
+export const getAnchorDepositStatus = (anchorTxId, sep24Url, anchorId) =>
+  api.get(`/anchor/status/${encodeURIComponent(anchorTxId)}`, {
+    params: { sep24Url, anchorId },
+  });
