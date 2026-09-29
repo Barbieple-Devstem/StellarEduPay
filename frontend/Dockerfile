@@ -7,12 +7,18 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci
 
-# NEXT_PUBLIC_* vars are inlined at build time — must be available here
-ARG NEXT_PUBLIC_API_URL=http://localhost:5000/api
+# Issue #1583: NEXT_PUBLIC_STELLAR_NETWORK is now read at runtime from
+# GET /api/public-config, so this image is environment-agnostic.
+# NEXT_PUBLIC_API_URL defaults to a relative path (empty string) so requests
+# go to the same origin — works behind the Next.js /api/* proxy rewrite.
+# These build args are kept for backwards compatibility but are no longer
+# required for a functional deployment.
+ARG NEXT_PUBLIC_API_URL=""
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 
-ARG NEXT_PUBLIC_STELLAR_NETWORK=testnet
-ENV NEXT_PUBLIC_STELLAR_NETWORK=$NEXT_PUBLIC_STELLAR_NETWORK
+# NEXT_PUBLIC_STELLAR_NETWORK is intentionally NOT set at build time.
+# The runtime value is fetched from GET /api/public-config at startup.
+# Setting it here would re-introduce the build-time bake-in problem.
 
 COPY . .
 RUN npm run build

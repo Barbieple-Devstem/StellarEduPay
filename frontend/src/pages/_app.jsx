@@ -2,16 +2,18 @@ import { createContext, useContext, useEffect, useState } from "react";
 import { useRouter } from "next/router";
 import Head from "next/head";
 import "../styles/globals.css";
-import "../styles/redesign.css";
 import Navbar from "../components/Navbar";
 import AppLayout from "../components/AppLayout";
 import ErrorBoundary from "../components/ErrorBoundary";
 import { AdminAuthProvider } from "../hooks/AdminAuthContext";
 import i18n, { SUPPORTED_LOCALES } from "../i18n";
+import { ADMIN_ROUTES } from "../config/navigation";
 
 export const ThemeContext = createContext({ dark: false, toggle: () => {} });
 export const useTheme = () => useContext(ThemeContext);
 
+// Routes that use the sidebar AppLayout (authenticated admin pages).
+// Derived from ADMIN_ROUTES — filter to those that actually use AppLayout.
 const APP_LAYOUT_ROUTES = [
   "/dashboard",
   "/reports",
@@ -20,10 +22,6 @@ const APP_LAYOUT_ROUTES = [
   "/audit-logs",
   "/disputes",
   "/source-validation-rules",
-  "/audit-logs",
-  "/fee-adjustments",
-  "/fees",
-  "/reports",
 ];
 
 export default function MyApp({ Component, pageProps }) {
@@ -77,10 +75,10 @@ MyApp.getInitialProps = async ({ Component, ctx }) => {
 
   // #1385 — robots.txt only asks crawlers not to fetch these URLs; a page
   // that's still linked from somewhere else can get indexed anyway without
-  // an explicit noindex signal. APP_LAYOUT_ROUTES is exactly the set of
+  // an explicit noindex signal. ADMIN_ROUTES is the canonical set of
   // authenticated admin pages (dashboard, audit logs, fee adjustments,
   // disputes, etc.), so it doubles as the noindex route list.
-  if (ctx.res && APP_LAYOUT_ROUTES.includes(ctx.pathname)) {
+  if (ctx.res && ADMIN_ROUTES.includes(ctx.pathname)) {
     ctx.res.setHeader("X-Robots-Tag", "noindex");
   }
 

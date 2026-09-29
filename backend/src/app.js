@@ -129,7 +129,33 @@ app.set('query parser', 'simple');
 app.use(cors({
   origin: allowedOrigins,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-School-ID', 'Idempotency-Key'],
+  // Issue #1584: Include every request header the API reads so that browser
+  // preflight (OPTIONS) succeeds for cross-origin requests.
+  //
+  // X-School-Slug  — accepted by resolveSchool and required by MFA setup
+  //                  (mfaController returns 400 MISSING_SCHOOL_SLUG without it)
+  // X-Correlation-ID / X-Request-ID — client-generated tracing headers used by
+  //                  requestLogger and correlationId utils for end-to-end tracing
+  allowedHeaders: [
+    'Content-Type',
+    'Authorization',
+    'X-School-ID',
+    'X-School-Slug',
+    'Idempotency-Key',
+    'X-Correlation-ID',
+    'X-Request-ID',
+  ],
+  // Issue #1584: Expose response headers so the browser JS can read them.
+  // Rate-limit headers let the frontend back off gracefully; correlation IDs
+  // allow client-side tracing to be linked to server-side logs.
+  exposedHeaders: [
+    'Retry-After',
+    'RateLimit-Limit',
+    'RateLimit-Remaining',
+    'RateLimit-Reset',
+    'X-Correlation-ID',
+    'X-Request-ID',
+  ],
   credentials: true,
 }));
 app.use(cookieParser());

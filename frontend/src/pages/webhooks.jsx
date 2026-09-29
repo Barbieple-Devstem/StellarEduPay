@@ -4,6 +4,7 @@ import PageHero from "../components/PageHero";
 import ConfirmationModal from "../components/ConfirmationModal";
 import { IconAlertTriangle, IconCheck, IconX, IconPlus, IconRefresh } from "../components/Icons";
 import { useTranslation } from "react-i18next";
+import styles from "../styles/webhooks.module.css";
 
 async function apiCall(method, path, body = null) {
   const opts = { method, headers: { 'Content-Type': 'application/json' } };
@@ -370,21 +371,6 @@ function WebhooksPage() {
           loading={deletingEndpoint}
         />
       )}
-
-      <style>{`
-        .alert-sm {
-          padding: 0.25rem 0.5rem;
-          font-size: 0.85rem;
-          margin-bottom: 0;
-        }
-        .btn-group-sm .btn {
-          padding: 0.25rem 0.5rem;
-          font-size: 0.85rem;
-        }
-        .gap-2 {
-          gap: 0.5rem;
-        }
-      `}</style>
     </RequireAdmin>
   );
 }
