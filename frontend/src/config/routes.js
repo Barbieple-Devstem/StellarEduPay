@@ -8,6 +8,7 @@
 export const ADMIN_ROUTES = [
   "/dashboard",
   "/students",
+  "/payments",
   "/reports",
   "/fees",
   "/fee-adjustments",

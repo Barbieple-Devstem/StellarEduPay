@@ -13,6 +13,7 @@ Disallow: /webhooks
 Disallow: /source-validation-rules
 Disallow: /mfa-setup
 Disallow: /students
+Disallow: /payments
 
 # Allow public pages
 Allow: /

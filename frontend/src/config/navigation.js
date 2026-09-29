@@ -29,6 +29,7 @@ export const NAV_ITEMS = [
   { href: "/pay-fees",                i18nKey: "nav.payFees",     Icon: IconCreditCard,    audience: "public" },
   { href: "/dashboard",               i18nKey: "nav.dashboard",   Icon: IconDashboard,     audience: "admin" },
   { href: "/students",                i18nKey: "nav.students",    Icon: IconUsers,         audience: "admin" },
+  { href: "/payments",                i18nKey: "nav.payments",    Icon: IconCreditCard,    audience: "admin" },
   { href: "/reports",                 i18nKey: "nav.reports",     Icon: IconBarChart,      audience: "admin" },
   { href: "/fees",                    i18nKey: "nav.fees",        Icon: IconDollarSign,    audience: "admin" },
   { href: "/fee-adjustments",         i18nKey: "nav.feeRules",    Icon: IconLayers,        audience: "admin" },
