@@ -81,6 +81,10 @@ export const getStudents = (page = 1, limit = 20, { search, status, className } 
     signal,
   });
 export const getStudent = (studentId, { signal } = {}) => api.get(`/students/${studentId}`, { signal });
+// Public endpoint: returns only masked student info (maskedName, class).
+// Does NOT require admin authentication — safe to call from the pay-fees page.
+export const getPublicStudent = (studentId, { signal } = {}) =>
+  api.get(`/students/public/${studentId}`, { signal });
 export const registerStudent = (data) => api.post("/students", data);
 export const updateStudent = (studentId, data) => api.patch(`/students/${encodeURIComponent(studentId)}`, data);
 export const getPaymentSummary = () => api.get("/payments/summary");
