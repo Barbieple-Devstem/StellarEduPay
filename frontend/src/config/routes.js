@@ -19,6 +19,7 @@ export const ADMIN_ROUTES = [
   "/audit-logs",
   "/disputes",
   "/settings",
+  "/security",
   "/mfa-setup",
 ];
 

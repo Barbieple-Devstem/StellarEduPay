@@ -12,6 +12,7 @@ import {
   IconExternalLink,
   IconUsers,
   IconSettings,
+  IconLock,
 } from "../components/Icons";
 
 /**
@@ -40,6 +41,7 @@ export const NAV_ITEMS = [
   { href: "/webhooks",                i18nKey: "nav.webhooks",    Icon: IconExternalLink,  audience: "admin" },
   { href: "/source-validation-rules", i18nKey: "nav.sourceRules", Icon: IconShield,        audience: "admin" },
   { href: "/settings",                i18nKey: "nav.settings",    Icon: IconSettings,      audience: "admin" },
+  { href: "/security",                i18nKey: "nav.security",    Icon: IconLock,          audience: "admin" },
   { href: "/audit-logs",              i18nKey: "nav.auditLogs",   Icon: IconFileText,      audience: "admin" },
 ];
 

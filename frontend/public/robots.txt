@@ -15,6 +15,7 @@ Disallow: /mfa-setup
 Disallow: /students
 Disallow: /payments
 Disallow: /settings
+Disallow: /security
 
 # Allow public pages
 Allow: /
