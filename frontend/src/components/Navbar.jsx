@@ -6,19 +6,8 @@ import TestnetBanner from "./TestnetBanner";
 import { useTheme } from "../pages/_app";
 import { useAdminAuthContext } from "../hooks/AdminAuthContext";
 import { SUPPORTED_LOCALES, LOCALE_NAMES } from "../i18n";
-
-const PUBLIC_LINKS = [
-  { href: "/pay-fees",  i18nKey: "nav.payFees" },
-  { href: "/dashboard", i18nKey: "nav.dashboard" },
-  { href: "/reports",   i18nKey: "nav.reports" },
-];
-
-const ADMIN_LINKS = [
-  { href: "/fee-adjustments", i18nKey: "nav.feeRules" },
-  { href: "/audit-logs",      i18nKey: "nav.auditLogs" },
-  { href: "/disputes",        i18nKey: "nav.disputes" },
-  { href: "/webhooks",        i18nKey: "nav.webhooks" },
-];
+import { getNavItems } from "../config/navigation";
+import { usesAppLayout } from "../config/routes";
 
 const SunIcon = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -42,7 +31,11 @@ export default function Navbar() {
   const { t, i18n } = useTranslation();
   const { dark, toggle } = useTheme();
   const { isAdmin, logout } = useAdminAuthContext();
-  const links = isAdmin ? [...PUBLIC_LINKS, ...ADMIN_LINKS] : PUBLIC_LINKS;
+  // #1580 — same navigation source as the AppLayout sidebar.
+  const links = getNavItems({ isAdmin });
+  // On sidebar routes the desktop sidebar already shows these links, so the top
+  // bar only shows them where the sidebar is hidden (narrow screens).
+  const hasSidebar = usesAppLayout(pathname);
 
   useEffect(() => { setOpen(false); }, [pathname]);
 
@@ -200,6 +193,9 @@ export default function Navbar() {
           background: rgba(255,255,255,0.07);
           margin: 0.5rem 0;
         }
+        @media (min-width: 769px) {
+          .nav--sidebar .nav-links { visibility: hidden; }
+        }
         @media (max-width: 720px) {
           .nav-links { display: none; }
           .nav-hamburger { display: flex; }
@@ -208,7 +204,7 @@ export default function Navbar() {
       `}</style>
 
       <TestnetBanner />
-      <nav className="nav" aria-label={t("nav.mainNavAria")}>
+      <nav className={`nav${hasSidebar ? " nav--sidebar" : ""}`} aria-label={t("nav.mainNavAria")}>
         <div className="nav-inner">
           <Link href="/" className="nav-brand">
             <div className="nav-logo">S</div>
