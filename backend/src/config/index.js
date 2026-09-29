@@ -242,6 +242,20 @@ if (isNaN(REQUEST_QUEUE_DEFAULT_TIMEOUT_MS) || REQUEST_QUEUE_DEFAULT_TIMEOUT_MS 
 // Global JSON body size limit (default: 10kb). Bulk import uses 1mb regardless.
 const MAX_BODY_SIZE = env.MAX_BODY_SIZE;
 
+// ── Bulk Import Limits ────────────────────────────────────────────────────────
+// Maximum number of student rows accepted by a single bulk import, shared by
+// both the CSV and JSON import paths so the two stay aligned (issue #1612).
+const CSV_MAX_ROWS = parseInt(process.env.CSV_MAX_ROWS || "10000", 10);
+
+// Body size limit for the JSON bulk import endpoint. Must be large enough to
+// carry CSV_MAX_ROWS student records in a single JSON payload, so it is derived
+// from CSV_MAX_ROWS rather than the global MAX_BODY_SIZE (default: 10kb).
+// ~1 KB per student record is a generous upper bound; the floor keeps small
+// CSV_MAX_ROWS overrides from shrinking the limit below the previous 1mb.
+const BULK_IMPORT_BODY_SIZE =
+  process.env.BULK_IMPORT_BODY_SIZE ||
+  `${Math.max(1, Math.ceil((CSV_MAX_ROWS * 1024) / (1024 * 1024)))}mb`;
+
 // ── Timeouts ──────────────────────────────────────────────────────────────────
 const REQUEST_TIMEOUT_MS = env.REQUEST_TIMEOUT_MS;
 const STELLAR_TIMEOUT_MS = env.STELLAR_TIMEOUT_MS;
@@ -309,6 +323,8 @@ module.exports = {
   REQUEST_QUEUE_MAX_SIZE,
   REQUEST_QUEUE_DEFAULT_TIMEOUT_MS,
   MAX_BODY_SIZE,
+  CSV_MAX_ROWS,
+  BULK_IMPORT_BODY_SIZE,
   REQUEST_TIMEOUT_MS,
   STELLAR_TIMEOUT_MS,
   TRUSTED_PROXY_HOPS,
