@@ -13,6 +13,7 @@ import {
   IconUsers,
   IconSettings,
   IconLock,
+  IconBell,
 } from "../components/Icons";
 
 /**
@@ -37,6 +38,7 @@ export const NAV_ITEMS = [
   { href: "/fee-adjustments",         i18nKey: "nav.feeRules",    Icon: IconLayers,        audience: "admin" },
   { href: "/analytics",               i18nKey: "nav.analytics",   Icon: IconTrendingUp,    audience: "admin" },
   { href: "/refunds",                 i18nKey: "nav.refunds",     Icon: IconRefreshCw,     audience: "admin" },
+  { href: "/reminders",               i18nKey: "nav.reminders",   Icon: IconBell,          audience: "admin" },
   { href: "/disputes",                i18nKey: "nav.disputes",    Icon: IconMessageCircle, audience: "admin" },
   { href: "/webhooks",                i18nKey: "nav.webhooks",    Icon: IconExternalLink,  audience: "admin" },
   { href: "/source-validation-rules", i18nKey: "nav.sourceRules", Icon: IconShield,        audience: "admin" },

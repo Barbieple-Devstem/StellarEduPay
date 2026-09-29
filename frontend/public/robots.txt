@@ -16,6 +16,7 @@ Disallow: /students
 Disallow: /payments
 Disallow: /settings
 Disallow: /security
+Disallow: /reminders
 
 # Allow public pages
 Allow: /

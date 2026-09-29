@@ -14,6 +14,7 @@ export const ADMIN_ROUTES = [
   "/fee-adjustments",
   "/analytics",
   "/refunds",
+  "/reminders",
   "/webhooks",
   "/source-validation-rules",
   "/audit-logs",
