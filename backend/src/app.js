@@ -49,9 +49,12 @@ const superAdminRoutes = require('./routes/superAdminRoutes');
 const cspReportRoutes = require('./routes/cspReportRoutes');
 const analyticsRoutes = require('./routes/analyticsRoutes');
 const userRoutes = require('./routes/userRoutes');
+const academicPeriodRoutes = require('./routes/academicPeriodRoutes');
+const anchorRoutes = require('./routes/anchorRoutes');
 
 const { registerPaymentSavedSubscribers } = require('./services/paymentSavedSubscribers');
 const { startPolling, stopPolling } = require('./services/transactionPollingService');
+const { startStreaming, stopStreaming } = require('./services/horizonStreamingService');
 const retrySelector = require('./services/retryServiceSelector');
 const { startConsistencyScheduler, stopConsistencyScheduler } = require('./services/consistencyScheduler');
 const { startReminderScheduler, stopReminderScheduler } = require('./services/reminderService');
@@ -212,6 +215,8 @@ app.use('/api/analytics', analyticsRoutes);
 app.use('/api/superadmin', superAdminRoutes);
 app.use('/api/csp-report', cspReportRoutes);
 app.use('/api', userRoutes);
+app.use('/api/academic-periods', academicPeriodRoutes);
+app.use('/api/anchor', anchorRoutes);
 app.get('/api/consistency', requireAdminAuth, runConsistencyCheck);
 app.get('/health', healthCheck);
 app.get('/health/live', healthLive);
@@ -352,6 +357,7 @@ connectDatabase().then(async () => {
 
 // Always-start services (handle concurrency internally)
    startPolling();
+   startStreaming();
    retrySelector.start();
    startTxQueueWorker();
    registerPaymentSavedSubscribers();
