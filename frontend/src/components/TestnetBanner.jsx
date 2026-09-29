@@ -79,7 +79,6 @@ export default function TestnetBanner() {
         animation: "navBlink 2s ease-in-out infinite",
       }} />
       {t("components.testnetBanner")}
-      <style>{`@keyframes navBlink { 0%,100%{opacity:1} 50%{opacity:0.3} }`}</style>
     </div>
   );
 }

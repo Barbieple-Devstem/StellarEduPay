@@ -7,6 +7,9 @@ import {
 } from "./Icons";
 import PageHero, { StatCard } from "./PageHero";
 import { useTranslation } from "react-i18next";
+// Issue #1585: import CSS module so the @keyframes spin is defined in the
+// stylesheet rather than injected as a global inline <style> block.
+import _styles from "../styles/ReportDownload.module.css"; // eslint-disable-line no-unused-vars
 
 export default function ReportDownload() {
   const { t } = useTranslation();
@@ -327,12 +330,6 @@ export default function ReportDownload() {
               </div>
             </div>
           )}
-
-          <style>{`
-            @keyframes spin {
-              to { transform: rotate(360deg); }
-            }
-          `}</style>
 
           {/* Summary stats */}
           <div className="stat-grid" style={{ marginBottom: "1.5rem" }}>
