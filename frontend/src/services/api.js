@@ -81,6 +81,10 @@ export const getStudents = (page = 1, limit = 20, { search, status, className } 
     signal,
   });
 export const getStudent = (studentId, { signal } = {}) => api.get(`/students/${studentId}`, { signal });
+// Public endpoint: returns only masked student info (maskedName, class).
+// Does NOT require admin authentication — safe to call from the pay-fees page.
+export const getPublicStudent = (studentId, { signal } = {}) =>
+  api.get(`/students/public/${studentId}`, { signal });
 export const registerStudent = (data) => api.post("/students", data);
 export const updateStudent = (studentId, data) => api.patch(`/students/${encodeURIComponent(studentId)}`, data);
 export const getPaymentSummary = () => api.get("/payments/summary");
@@ -97,10 +101,13 @@ export const deleteFeeStructure = (className) => api.delete(`/fees/${encodeURICo
 
 // Reports
 export const getReport = (params = {}) => api.get("/reports", { params });
+// Issue #1577 — getReportCsvUrl now returns a relative URL so it goes through
+// the Next.js /api/* rewrite proxy. This keeps SameSite=Strict auth cookies
+// first-party in split-host deployments. Callers that need a direct link can
+// still construct an absolute URL by prepending NEXT_PUBLIC_API_URL.
 export const getReportCsvUrl = (params = {}) => {
-  const base = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api";
   const query = new URLSearchParams({ ...params, format: "csv" }).toString();
-  return `${base}/reports?${query}`;
+  return `/api/reports?${query}`;
 };
 
 // Currency conversion
@@ -120,10 +127,12 @@ export const getPaymentRefunds = (txHash) => api.get(`/payments/${txHash}/refund
 export const getSchoolRefunds = (params = {}) => api.get("/payments/refunds/school/list", { params });
 
 // Audit logs
+// Issue #1575 — backend mounts audit routes at /api/audit; the frontend
+// previously called /api/audit-logs which always returned 404.
 export const getRecentAuditLogs = (limit = 10) =>
-  api.get("/audit-logs/recent", { params: { limit } });
+  api.get("/audit/recent", { params: { limit } });
 export const getAuditLogs = (params = {}) =>
-  api.get("/audit-logs", { params });
+  api.get("/audit", { params });
 
 // Fee adjustment rules
 export const getFeeAdjustmentRules = (schoolId) =>

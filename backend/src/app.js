@@ -211,6 +211,22 @@ app.use('/api/webhook-deliveries', webhookDeliveryRoutes);
 app.use('/api/email', emailRoutes);
 app.use('/api/payment-plans', paymentPlanRoutes);
 app.use('/api/audit', auditRoutes);
+// Issue #1575 — alias /api/audit-logs → /api/audit for one release so
+// integrators following the old API spec docs get a 200 with a Deprecation
+// header rather than a hard 404.  Remove this alias in the next major version.
+app.use('/api/audit-logs', (req, res, next) => {
+  res.set('Deprecation', 'true');
+  res.set('Link', '</api/audit>; rel="successor-version"');
+  next();
+}, auditRoutes);
+// Issue #1575 — alias /api/audit-logs → /api/audit for one release so
+// integrators following the old API spec docs get a 200 with a Deprecation
+// header rather than a hard 404.  Remove this alias in the next major version.
+app.use('/api/audit-logs', (req, res, next) => {
+  res.set('Deprecation', 'true');
+  res.set('Link', '</api/audit>; rel="successor-version"');
+  next();
+}, auditRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/superadmin', superAdminRoutes);
 app.use('/api/csp-report', cspReportRoutes);
