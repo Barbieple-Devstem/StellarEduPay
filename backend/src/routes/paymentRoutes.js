@@ -143,6 +143,28 @@ const idempotency = idempotencyMiddleware({ criticalPaymentEndpoints: true });
 
 /**
  * @swagger
+ * /api/payments/receipts/{receiptId}/verify:
+ *   get:
+ *     summary: Verify the authenticity of a payment receipt
+ *     operationId: verifyReceipt
+ *     tags:
+ *       - Payments
+ *     parameters:
+ *       - in: path
+ *         name: receiptId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Receipt ID embedded in the printed/emailed receipt
+ *     responses:
+ *       200:
+ *         description: Receipt verification result
+ *       404:
+ *         description: Receipt not found
+ */
+
+/**
+ * @swagger
  * /api/payments/sync:
  *   post:
  *     summary: Sync payments from Stellar blockchain
@@ -160,6 +182,10 @@ const idempotency = idempotencyMiddleware({ criticalPaymentEndpoints: true });
 
 // No school context required
 router.get("/verify/:txHash", validateTxHashParam, verifyLimiter, verifyTransactionHash);
+
+// Receipt verification lives on a distinct path so it is not shadowed by
+// "/verify/:txHash" above (which rejects non-hash params with 400).
+router.get("/receipts/:receiptId/verify", verifyReceipt);
 
 // Validation runs BEFORE resolveSchool so missing-school requests still get
 // proper 400 validation errors when the body itself is invalid.
@@ -230,14 +256,6 @@ router.patch("/:txHash/status", requireSchoolAuth(['owner', 'staff']), auditCont
 router.patch("/:txHash/suspicion-review", requireSchoolAuth(['owner', 'staff']), auditContext, reviewSuspiciousPayment);
 router.patch("/:txHash/correct-placeholder", requireSchoolAuth(['owner', 'staff']), auditContext, correctPlaceholderPayment);
 
-router.post("/:txHash/refund", requireSchoolAuth(['owner']), auditContext, initiatePaymentRefund);
-router.post("/refunds/:refundId/approve", requireSchoolAuth(['owner']), auditContext, approvePaymentRefund);
-router.get("/:txHash/refunds", requireSchoolAuth(['owner', 'staff', 'read_only']), getPaymentRefunds);
-router.get("/refunds/school/list", requireSchoolAuth(['owner', 'staff', 'read_only']), getSchoolRefunds);
+router
 
-router.get("/verify/:receiptId", verifyReceipt);
-
-router.get("/reconciliation/reports", requireSchoolAuth(['owner', 'staff', 'read_only']), getReconciliationReports);
-router.post("/reconciliation/report", requireSchoolAuth(['owner', 'staff']), auditContext, generateSchoolReconciliationReport);
-
-module.exports = router;
+/* … truncated 733 chars — edit only what you need near the top … */
