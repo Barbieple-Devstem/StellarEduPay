@@ -2,8 +2,7 @@ import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import PageHero from "../components/PageHero";
 import { IconAlertTriangle, IconTrendingUp, IconUsers } from "../components/Icons";
-
-const API_BASE = process.env.REACT_APP_API_BASE || '/api';
+import api from "../services/api";
 
 function Analytics() {
   const { t } = useTranslation();
@@ -25,10 +24,12 @@ function Analytics() {
       setError(null);
 
       const [summaryRes, trendRes, classRes, cohortRes] = await Promise.allSettled([
-        fetch(`${API_BASE}/analytics/summary`).then(r => r.json()),
-        fetch(`${API_BASE}/analytics/volume-trend?period=${period}`).then(r => r.json()),
-        fetch(`${API_BASE}/analytics/class-completion`).then(r => r.json()),
-        fetch(`${API_BASE}/analytics/unpaid-cohorts`).then(r => r.json()),
+        // #1578 — go through the shared axios client so the single API base,
+        // credentials, school header and token refresh all apply.
+        api.get('/analytics/summary').then(r => r.data),
+        api.get('/analytics/volume-trend', { params: { period } }).then(r => r.data),
+        api.get('/analytics/class-completion').then(r => r.data),
+        api.get('/analytics/unpaid-cohorts').then(r => r.data),
       ]);
 
       if (summaryRes.status === 'fulfilled') setSummary(summaryRes.value.summary);

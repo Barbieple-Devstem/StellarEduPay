@@ -3,16 +3,18 @@ import PageHero from "../components/PageHero";
 import ConfirmationModal from "../components/ConfirmationModal";
 import { IconAlertTriangle, IconCheck, IconX, IconPlus, IconRefresh } from "../components/Icons";
 import { useTranslation } from "react-i18next";
+import api from "../services/api";
 
+// #1578 — use the shared axios client so the single API base, credentials,
+// school header and token refresh apply to webhook calls too.
 async function apiCall(method, path, body = null) {
-  const opts = { method, headers: { 'Content-Type': 'application/json' } };
-  if (body) opts.body = JSON.stringify(body);
-  const res = await fetch(`/api${path}`, opts);
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.error || `HTTP ${res.status}`);
+  try {
+    const res = await api.request({ method, url: path, ...(body && { data: body }) });
+    return res.data;
+  } catch (err) {
+    const status = err.response?.status;
+    throw new Error(err.response?.data?.error || (status ? `HTTP ${status}` : err.message));
   }
-  return res.json();
 }
 
 function timeAgo(iso, t) {
