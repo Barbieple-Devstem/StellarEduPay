@@ -51,7 +51,9 @@
     "nodemon": "^3.0.0",
     "supertest": "^6.3.0"
   },
-  "engines": {
-    "node": ">=20.0.0"
+  "jest": {
+    "moduleNameMapper": {
+      "^axios$": "<rootDir>/tests/__stubs__/axios.js"
+    }
   }
 }
