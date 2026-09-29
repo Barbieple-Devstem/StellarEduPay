@@ -11,15 +11,17 @@ const {
 
 const isDev = process.env.NODE_ENV !== 'production';
 
-// Origin of the backend API (scheme://host:port) — only needed when
-// NEXT_PUBLIC_API_URL is an explicit absolute cross-host override (#1578).
-// With the default relative base "/api" every call is same-origin, so
-// connect-src 'self' already covers it and no extra origin is added.
+// Origin of the backend API (scheme://host:port), derived from the public API
+// URL so the CSP connect-src can permit cross-origin XHR to it. Falls back to
+// the local dev backend.
+// Issue #1583: NEXT_PUBLIC_API_URL may be empty (relative path) when running
+// behind the Next.js /api/* proxy rewrite, in which case we omit it from the
+// CSP connect-src (same-origin requests don't need an explicit allow).
 const API_ORIGIN = (() => {
-  const base = (process.env.NEXT_PUBLIC_API_URL || '/api').trim();
-  if (base.startsWith('/')) return '';
+  const raw = process.env.NEXT_PUBLIC_API_URL || '';
+  if (!raw || raw.startsWith('/')) return null; // relative — same origin, no CSP entry needed
   try {
-    return new URL(base).origin;
+    return new URL(raw).origin;
   } catch {
     return '';
   }
@@ -47,9 +49,10 @@ const CSP = [
   "img-src 'self' data:",
   `font-src 'self' ${FONT_SRC_ORIGINS.join(' ')} data:`,
   // Allow fetch/XHR to the backend API and Stellar Horizon (testnet + mainnet).
-  // The backend API origin is only included for an explicit cross-host
-  // NEXT_PUBLIC_API_URL override; the default same-origin /api needs none.
-  `connect-src ${["'self'", API_ORIGIN, ...CONNECT_SRC_ORIGINS].filter(Boolean).join(' ')}`,
+  // The backend API origin is included so the browser can reach it cross-origin
+  // in split-port deployments (e.g. localhost:3000 UI → localhost:5000 API).
+  // When API_ORIGIN is null (relative URL, same-origin), omit it from the CSP.
+  `connect-src 'self'${API_ORIGIN ? ` ${API_ORIGIN}` : ''} ${CONNECT_SRC_ORIGINS.join(' ')}`,
   "object-src 'none'",
   "frame-ancestors 'none'",
   "base-uri 'self'",

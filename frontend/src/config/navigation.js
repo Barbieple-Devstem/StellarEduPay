@@ -1,59 +1,31 @@
-import {
-  IconDashboard,
-  IconCreditCard,
-  IconBarChart,
-  IconLayers,
-  IconFileText,
-  IconMessageCircle,
-  IconDollarSign,
-  IconShield,
-  IconTrendingUp,
-  IconRefreshCw,
-  IconExternalLink,
-  IconUsers,
-  IconSettings,
-  IconLock,
-  IconBell,
-} from "../components/Icons";
-
 /**
- * Single source of truth for app navigation (#1580).
+ * Canonical list of admin/authenticated routes.
  *
- * Both the top bar (Navbar — public pages and mobile) and the admin sidebar
- * (AppLayout — desktop) render from this list, so they can no longer drift.
- * Each `href` must appear exactly once.
+ * Referenced by:
+ *  - pages/robots.txt.js  — populates the Disallow list so no admin page is crawlable
+ *  - src/pages/_app.jsx   — sets X-Robots-Tag: noindex on server-rendered admin pages
+ *  - tests/robots.test.js — asserts every entry is present in the Disallow list
  *
- * audience:
- *   'public' — shown to everyone
- *   'admin'  — shown only to authenticated admins (the route itself is guarded
- *              centrally via ADMIN_ROUTES in config/routes.js)
+ * When a new admin page is added, add its path here and it will automatically
+ * be disallowed from crawling. Public (non-admin) pages must NOT appear in
+ * this list.
  */
-export const NAV_ITEMS = [
-  { href: "/pay-fees",                i18nKey: "nav.payFees",     Icon: IconCreditCard,    audience: "public" },
-  { href: "/dashboard",               i18nKey: "nav.dashboard",   Icon: IconDashboard,     audience: "admin" },
-  { href: "/students",                i18nKey: "nav.students",    Icon: IconUsers,         audience: "admin" },
-  { href: "/payments",                i18nKey: "nav.payments",    Icon: IconCreditCard,    audience: "admin" },
-  { href: "/reports",                 i18nKey: "nav.reports",     Icon: IconBarChart,      audience: "admin" },
-  { href: "/fees",                    i18nKey: "nav.fees",        Icon: IconDollarSign,    audience: "admin" },
-  { href: "/fee-adjustments",         i18nKey: "nav.feeRules",    Icon: IconLayers,        audience: "admin" },
-  { href: "/analytics",               i18nKey: "nav.analytics",   Icon: IconTrendingUp,    audience: "admin" },
-  { href: "/refunds",                 i18nKey: "nav.refunds",     Icon: IconRefreshCw,     audience: "admin" },
-  { href: "/reminders",               i18nKey: "nav.reminders",   Icon: IconBell,          audience: "admin" },
-  { href: "/disputes",                i18nKey: "nav.disputes",    Icon: IconMessageCircle, audience: "admin" },
-  { href: "/webhooks",                i18nKey: "nav.webhooks",    Icon: IconExternalLink,  audience: "admin" },
-  { href: "/source-validation-rules", i18nKey: "nav.sourceRules", Icon: IconShield,        audience: "admin" },
-  { href: "/settings",                i18nKey: "nav.settings",    Icon: IconSettings,      audience: "admin" },
-  { href: "/security",                i18nKey: "nav.security",    Icon: IconLock,          audience: "admin" },
-  { href: "/audit-logs",              i18nKey: "nav.auditLogs",   Icon: IconFileText,      audience: "admin" },
+const ADMIN_ROUTES = [
+  '/dashboard',
+  '/reports',
+  '/fees',
+  '/fee-adjustments',
+  '/audit-logs',
+  '/disputes',
+  '/source-validation-rules',
+  '/login',
+  '/mfa-setup',
+  '/set-password',
+  '/reset-password',
+  '/webhooks',
+  '/analytics',
+  '/refunds',
+  '/unsubscribe',
 ];
 
-export const PUBLIC_NAV_ITEMS = NAV_ITEMS.filter((item) => item.audience === "public");
-export const ADMIN_NAV_ITEMS = NAV_ITEMS.filter((item) => item.audience === "admin");
-
-/**
- * Items visible to the current viewer, in display order.
- * @param {{ isAdmin: boolean }} opts
- */
-export function getNavItems({ isAdmin } = {}) {
-  return isAdmin ? NAV_ITEMS : PUBLIC_NAV_ITEMS;
-}
+module.exports = { ADMIN_ROUTES };

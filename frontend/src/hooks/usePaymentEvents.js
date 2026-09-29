@@ -47,6 +47,10 @@ export function usePaymentEvents({ enabled = true, onEvent } = {}) {
     if (typeof window === 'undefined') return;
 
     const schoolId = localStorage.getItem('schoolId');
+    // Issue #1574 — EventSource cannot send custom headers; schoolId must be
+    // passed as a query parameter so resolveSchool can identify the tenant.
+    // If no schoolId is stored (e.g. the public pay-fees page) the hook should
+    // not attempt a connection — guard with `enabled=false` at call site.
     if (!schoolId) return;
 
     const url = apiUrl('/payments/events', { schoolId });

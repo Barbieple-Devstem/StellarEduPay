@@ -4,9 +4,12 @@ import { API_BASE_URL, apiUrl } from "../config/apiBase";
 
 const TIMEOUT_MS = parseInt(process.env.NEXT_PUBLIC_REQUEST_TIMEOUT_MS || "15000", 10);
 
+// Issue #1583: Default to a relative base URL so the same frontend build works
+// for any deployment. The Next.js /api/* proxy rewrite (next.config.js) forwards
+// same-origin /api/* requests to the backend, keeping auth cookies first-party.
+// An explicit NEXT_PUBLIC_API_URL can still be set for split-origin dev setups.
 const api = axios.create({
-  // #1578 — one configuration value (see config/apiBase.js) drives every call.
-  baseURL: API_BASE_URL,
+  baseURL: process.env.NEXT_PUBLIC_API_URL || "/api",
   timeout: TIMEOUT_MS,
   withCredentials: true,
 });
@@ -83,6 +86,10 @@ export const getStudents = (page = 1, limit = 20, { search, status, className } 
     signal,
   });
 export const getStudent = (studentId, { signal } = {}) => api.get(`/students/${studentId}`, { signal });
+// Public endpoint: returns only masked student info (maskedName, class).
+// Does NOT require admin authentication — safe to call from the pay-fees page.
+export const getPublicStudent = (studentId, { signal } = {}) =>
+  api.get(`/students/public/${studentId}`, { signal });
 export const registerStudent = (data) => api.post("/students", data);
 export const updateStudent = (studentId, data) => api.patch(`/students/${encodeURIComponent(studentId)}`, data);
 export const getPaymentSummary = () => api.get("/payments/summary");
@@ -99,8 +106,14 @@ export const deleteFeeStructure = (className) => api.delete(`/fees/${encodeURICo
 
 // Reports
 export const getReport = (params = {}) => api.get("/reports", { params });
-export const getReportCsvUrl = (params = {}) =>
-  apiUrl("/reports", { ...params, format: "csv" });
+// Issue #1577 — getReportCsvUrl now returns a relative URL so it goes through
+// the Next.js /api/* rewrite proxy. This keeps SameSite=Strict auth cookies
+// first-party in split-host deployments. Callers that need a direct link can
+// still construct an absolute URL by prepending NEXT_PUBLIC_API_URL.
+export const getReportCsvUrl = (params = {}) => {
+  const query = new URLSearchParams({ ...params, format: "csv" }).toString();
+  return `/api/reports?${query}`;
+};
 
 // Currency conversion
 export const getConversionRates = () => api.get("/payments/rates");
@@ -119,10 +132,12 @@ export const getPaymentRefunds = (txHash) => api.get(`/payments/${txHash}/refund
 export const getSchoolRefunds = (params = {}) => api.get("/payments/refunds/school/list", { params });
 
 // Audit logs
+// Issue #1575 — backend mounts audit routes at /api/audit; the frontend
+// previously called /api/audit-logs which always returned 404.
 export const getRecentAuditLogs = (limit = 10) =>
-  api.get("/audit-logs/recent", { params: { limit } });
+  api.get("/audit/recent", { params: { limit } });
 export const getAuditLogs = (params = {}) =>
-  api.get("/audit-logs", { params });
+  api.get("/audit", { params });
 
 // Fee adjustment rules
 export const getFeeAdjustmentRules = (schoolId) =>
@@ -164,59 +179,14 @@ export const updateInstallment = (studentId, installmentIndex, data) =>
 export const cancelPaymentPlan = (studentId) =>
   api.delete(`/payment-plans/${studentId}`);
 
-// ── #1581 admin screens ───────────────────────────────────────────────────────
+// ── SEP-24 Anchor payments (Issue #1571) ──────────────────────────────────────
+export const listAnchors = () =>
+  api.get('/anchor/anchors');
 
-// Students
-export const deleteStudent = (studentId, data = {}) =>
-  api.delete(`/students/${encodeURIComponent(studentId)}`, { data });
-export const restoreStudent = (studentId) =>
-  api.post(`/students/${encodeURIComponent(studentId)}/restore`);
-export const bulkImportStudents = (file) => {
-  const form = new FormData();
-  form.append("file", file);
-  // No explicit Content-Type: the browser sets multipart/form-data with the
-  // boundary the backend's streaming CSV parser needs.
-  return api.post("/students/bulk", form);
-};
-// Through axios (not a bare link) so the X-School-ID header and auth refresh apply.
-export const exportStudents = (params = {}) =>
-  api.get("/students/export", { params, responseType: "blob" });
-export const getStudentFeeHistory = (studentId, params = {}) =>
-  api.get(`/students/${encodeURIComponent(studentId)}/fee-history`, { params });
-export const resetStudentPayment = (studentId, data = {}) =>
-  api.post(`/students/${encodeURIComponent(studentId)}/reset-payment`, data);
-export const reconcileStudent = (studentId) =>
-  api.post(`/students/${encodeURIComponent(studentId)}/reconcile`);
-export const getOverdueStudents = () => api.get("/students/overdue");
+export const initiateAnchorDeposit = (data) =>
+  api.post('/anchor/initiate', data);
 
-// Payments
-export const getPayments = (params = {}, { signal } = {}) => api.get("/payments", { params, signal });
-export const getSuspiciousPayments = (params = {}) => api.get("/payments/suspicious", { params });
-export const getPendingPayments = (params = {}) => api.get("/payments/pending", { params });
-export const getStuckPayments = () => api.get("/payments/stuck");
-export const getOverpayments = (params = {}) => api.get("/payments/overpayments", { params });
-export const reviewSuspiciousPayment = (txHash, data) =>
-  api.patch(`/payments/${encodeURIComponent(txHash)}/suspicion-review`, data);
-export const updatePaymentStatus = (txHash, data) =>
-  api.patch(`/payments/${encodeURIComponent(txHash)}/status`, data);
-export const correctPlaceholderPayment = (txHash, data) =>
-  api.patch(`/payments/${encodeURIComponent(txHash)}/correct-placeholder`, data);
-
-// School settings (key/value runtime settings)
-export const getSchoolById = (schoolId) => api.get(`/schools/${encodeURIComponent(schoolId)}`);
-export const updateSchoolById = (schoolId, data) => api.patch(`/schools/${encodeURIComponent(schoolId)}`, data);
-export const getSchoolSettings = (schoolId) => api.get(`/schools/${encodeURIComponent(schoolId)}/settings`);
-export const updateSchoolSettings = (schoolId, data) =>
-  api.patch(`/schools/${encodeURIComponent(schoolId)}/settings`, data);
-export const getPaymentLimits = () => api.get("/payments/limits");
-export const getAcceptedAssets = () => api.get("/payments/accepted-assets");
-
-// Security — sessions
-export const listSessions = () => api.get("/auth/sessions");
-export const revokeSession = (sessionId) => api.delete(`/auth/sessions/${encodeURIComponent(sessionId)}`);
-
-// Reminders
-export const previewReminders = () => api.get("/reminders/preview");
-export const triggerReminders = () => api.post("/reminders/trigger");
-export const setReminderOptOut = (studentId, optOut) =>
-  api.post("/reminders/opt-out", { studentId, optOut });
+export const getAnchorDepositStatus = (anchorTxId, sep24Url, anchorId) =>
+  api.get(`/anchor/status/${encodeURIComponent(anchorTxId)}`, {
+    params: { sep24Url, anchorId },
+  });

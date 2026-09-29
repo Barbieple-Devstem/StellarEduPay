@@ -123,8 +123,16 @@ async function exportAuditLogsEndpoint(req, res, next) {
   }
 }
 
-module.exports = { getAuditLogsEndpoint, getRecentAuditLogsEndpoint, verifyChainEndpoint, exportAuditLogsEndpoint };
-
+/**
+ * GET /api/audit/verify-chain
+ *
+ * Walks the per-school audit hash chain and reports any breaks. The chain is
+ * ordered by the monotonic `seq` assigned at append time (see auditService),
+ * not by `_id`, so concurrent writes cannot produce false positives.
+ *
+ * Query parameters:
+ *   - limit: max entries to verify (default: 1000, max: 5000)
+ */
 async function verifyChainEndpoint(req, res, next) {
   try {
     const limit = Math.min(parseInt(req.query.limit, 10) || 1000, 5000);
@@ -134,3 +142,5 @@ async function verifyChainEndpoint(req, res, next) {
     next(err);
   }
 }
+
+module.exports = { getAuditLogsEndpoint, getRecentAuditLogsEndpoint, verifyChainEndpoint, exportAuditLogsEndpoint };

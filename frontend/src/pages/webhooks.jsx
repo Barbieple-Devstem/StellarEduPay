@@ -3,7 +3,7 @@ import PageHero from "../components/PageHero";
 import ConfirmationModal from "../components/ConfirmationModal";
 import { IconAlertTriangle, IconCheck, IconX, IconPlus, IconRefresh } from "../components/Icons";
 import { useTranslation } from "react-i18next";
-import api from "../services/api";
+import styles from "../styles/webhooks.module.css";
 
 // #1578 — use the shared axios client so the single API base, credentials,
 // school header and token refresh apply to webhook calls too.
@@ -371,22 +371,7 @@ function WebhooksPage() {
           loading={deletingEndpoint}
         />
       )}
-
-      <style>{`
-        .alert-sm {
-          padding: 0.25rem 0.5rem;
-          font-size: 0.85rem;
-          margin-bottom: 0;
-        }
-        .btn-group-sm .btn {
-          padding: 0.25rem 0.5rem;
-          font-size: 0.85rem;
-        }
-        .gap-2 {
-          gap: 0.5rem;
-        }
-      `}</style>
-    </>
+    </RequireAdmin>
   );
 }
 
