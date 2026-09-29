@@ -26,15 +26,31 @@ async function getDataVersion(schoolId) {
 /**
  * Aggregate confirmed payments grouped by date (YYYY-MM-DD), scoped to a school.
  *
- * @param {{ schoolId: string, startDate?: string, endDate?: string, timezone?: string }} options
+ * @param {{ schoolId: string, startDate?: string, endDate?: string, timezone?: string, periodId?: string }} options
  */
-async function aggregateByDate({ schoolId, startDate, endDate, timezone = 'UTC' } = {}) {
+async function aggregateByDate({ schoolId, startDate, endDate, timezone = 'UTC', periodId } = {}) {
   const match = { schoolId, status: 'SUCCESS', studentDeleted: { $ne: true }, deletedAt: null };
 
   if (startDate || endDate) {
     match.confirmedAt = {};
     if (startDate) match.confirmedAt.$gte = new Date(startDate + 'T00:00:00.000Z');
     if (endDate)   match.confirmedAt.$lte = new Date(endDate   + 'T23:59:59.999Z');
+  }
+
+  // Issue #1569 — optional period-scoped filter: if periodId is supplied,
+  // narrow the date range to the period's startsAt/endsAt boundaries.
+  if (periodId) {
+    const AcademicPeriod = require('../models/academicPeriodModel');
+    const period = await AcademicPeriod.findOne({ _id: periodId, schoolId }).lean();
+    if (period) {
+      if (!match.confirmedAt) match.confirmedAt = {};
+      if (!match.confirmedAt.$gte || period.startsAt > match.confirmedAt.$gte) {
+        match.confirmedAt.$gte = period.startsAt;
+      }
+      if (!match.confirmedAt.$lte || period.endsAt < match.confirmedAt.$lte) {
+        match.confirmedAt.$lte = period.endsAt;
+      }
+    }
   }
 
   const rows = await Payment.aggregate([
