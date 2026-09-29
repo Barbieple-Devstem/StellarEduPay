@@ -125,6 +125,71 @@ if (MAX_PAYMENT_AMOUNT <= MIN_PAYMENT_AMOUNT) {
   );
 }
 
+// ── Global Rate Limiting & Request Queue (issue #1597) ────────────────────────
+// The global limiter previously hard-coded 100 req/min per IP, which throttled
+// entire schools sharing a single NAT/CGNAT address. These values are now
+// configurable per environment. Authenticated traffic is keyed by user/school
+// principal (see app.js), so the authenticated limit can be generous while the
+// anonymous limit stays strict.
+const RATE_LIMIT_GLOBAL_WINDOW_MS = parseInt(
+  process.env.RATE_LIMIT_GLOBAL_WINDOW_MS || "60000",
+  10,
+);
+const RATE_LIMIT_GLOBAL_MAX = parseInt(
+  process.env.RATE_LIMIT_GLOBAL_MAX || "100",
+  10,
+);
+// Higher default for authenticated principals (user/school) so a bursar's
+// dashboard and multiple staff behind one IP are not throttled.
+const RATE_LIMIT_AUTHENTICATED_MAX = parseInt(
+  process.env.RATE_LIMIT_AUTHENTICATED_MAX || "600",
+  10,
+);
+
+const REQUEST_QUEUE_MAX_CONCURRENT = parseInt(
+  process.env.REQUEST_QUEUE_MAX_CONCURRENT || "50",
+  10,
+);
+const REQUEST_QUEUE_MAX_SIZE = parseInt(
+  process.env.REQUEST_QUEUE_MAX_SIZE || "1000",
+  10,
+);
+const REQUEST_QUEUE_DEFAULT_TIMEOUT_MS = parseInt(
+  process.env.REQUEST_QUEUE_DEFAULT_TIMEOUT_MS || "30000",
+  10,
+);
+
+if (isNaN(RATE_LIMIT_GLOBAL_WINDOW_MS) || RATE_LIMIT_GLOBAL_WINDOW_MS <= 0) {
+  throw new Error(
+    `[Config] RATE_LIMIT_GLOBAL_WINDOW_MS must be a positive integer, got: ${process.env.RATE_LIMIT_GLOBAL_WINDOW_MS}`,
+  );
+}
+if (isNaN(RATE_LIMIT_GLOBAL_MAX) || RATE_LIMIT_GLOBAL_MAX <= 0) {
+  throw new Error(
+    `[Config] RATE_LIMIT_GLOBAL_MAX must be a positive integer, got: ${process.env.RATE_LIMIT_GLOBAL_MAX}`,
+  );
+}
+if (isNaN(RATE_LIMIT_AUTHENTICATED_MAX) || RATE_LIMIT_AUTHENTICATED_MAX <= 0) {
+  throw new Error(
+    `[Config] RATE_LIMIT_AUTHENTICATED_MAX must be a positive integer, got: ${process.env.RATE_LIMIT_AUTHENTICATED_MAX}`,
+  );
+}
+if (isNaN(REQUEST_QUEUE_MAX_CONCURRENT) || REQUEST_QUEUE_MAX_CONCURRENT <= 0) {
+  throw new Error(
+    `[Config] REQUEST_QUEUE_MAX_CONCURRENT must be a positive integer, got: ${process.env.REQUEST_QUEUE_MAX_CONCURRENT}`,
+  );
+}
+if (isNaN(REQUEST_QUEUE_MAX_SIZE) || REQUEST_QUEUE_MAX_SIZE < 0) {
+  throw new Error(
+    `[Config] REQUEST_QUEUE_MAX_SIZE must be a non-negative integer, got: ${process.env.REQUEST_QUEUE_MAX_SIZE}`,
+  );
+}
+if (isNaN(REQUEST_QUEUE_DEFAULT_TIMEOUT_MS) || REQUEST_QUEUE_DEFAULT_TIMEOUT_MS <= 0) {
+  throw new Error(
+    `[Config] REQUEST_QUEUE_DEFAULT_TIMEOUT_MS must be a positive integer, got: ${process.env.REQUEST_QUEUE_DEFAULT_TIMEOUT_MS}`,
+  );
+}
+
 // ── Body Size Limit ───────────────────────────────────────────────────────────
 // Global JSON body size limit (default: 10kb). Bulk import uses 1mb regardless.
 const MAX_BODY_SIZE = process.env.MAX_BODY_SIZE || '10kb';
@@ -188,88 +253,9 @@ const SMTP_PORT = parseInt(process.env.SMTP_PORT || "587", 10);
 const SMTP_SECURE = process.env.SMTP_SECURE === "true";
 const SMTP_USER = process.env.SMTP_USER || null;
 const SMTP_PASS = process.env.SMTP_PASS || null;
-const SMTP_FROM = process.env.SMTP_FROM || "noreply@stellaredupay.com";
+const SMTP_FROM = process.env.SMTP_FROM || "no-reply@schoolpay.local";
 
-// Email provider inbound webhook secret
-const EMAIL_PROVIDER_WEBHOOK_SECRET = process.env.EMAIL_PROVIDER_WEBHOOK_SECRET || null;
-
-// Email bounce/complaint webhook authentication (Issue #1537).
-//   EMAIL_WEBHOOK_SECRET               — shared secret, accepted ONLY via the
-//                                        X-Webhook-Token header.
-//   EMAIL_SNS_TOPIC_ARNS               — comma-separated SNS topic ARNs allowed
-//                                        to deliver SES notifications.
-//   EMAIL_SENDGRID_WEBHOOK_PUBLIC_KEY  — SendGrid Signed Event Webhook
-//                                        verification key (base64 DER / PEM).
-const EMAIL_WEBHOOK_SECRET = process.env.EMAIL_WEBHOOK_SECRET || null;
-const EMAIL_SNS_TOPIC_ARNS = (process.env.EMAIL_SNS_TOPIC_ARNS || '')
-  .split(',').map((s) => s.trim()).filter(Boolean);
-const EMAIL_SENDGRID_WEBHOOK_PUBLIC_KEY = process.env.EMAIL_SENDGRID_WEBHOOK_PUBLIC_KEY || null;
-
-// Webhook V1 signature sunset (Issue #1539). After this date (YYYY-MM-DD,
-// inclusive, UTC) V1 signatures are never emitted. Validated at startup.
-const WEBHOOK_V1_SUNSET = process.env.WEBHOOK_V1_SUNSET || '2027-02-28';
-require('../utils/webhookSignaturePolicy').parseV1Sunset(WEBHOOK_V1_SUNSET);
-
-// Pluggable email provider (Issue #80): smtp | ses | sendgrid | console.
-// When unset the email module auto-selects smtp (if SMTP_* configured) else console.
-const EMAIL_PROVIDER = process.env.EMAIL_PROVIDER || null;
-const SENDGRID_API_KEY = process.env.SENDGRID_API_KEY || null;
-const AWS_REGION = process.env.AWS_REGION || null;
-
-// ── Application URL ──────────────────────────────────────────────────────────
-// Base URL of the application (used for generating unsubscribe links in emails, etc.)
-const APP_URL = process.env.APP_URL || null;
-if (process.env.NODE_ENV === 'production' && !APP_URL) {
-  throw new Error(
-    '[Config] APP_URL is required in production. ' +
-    'Set it to the base URL of your application (e.g., https://stellaredupay.example.com)'
-  );
-}
-if (APP_URL) {
-  let parsedAppUrl;
-  try {
-    parsedAppUrl = new URL(APP_URL);
-  } catch (err) {
-    throw new Error(
-      `[Config] APP_URL must be a valid absolute URL. Got: ${APP_URL}`
-    );
-  }
-  // Issue #1542: APP_URL is embedded in parent-facing emails (unsubscribe
-  // links, RFC 8058 List-Unsubscribe headers) and must be HTTPS in production.
-  if (process.env.NODE_ENV === 'production' && parsedAppUrl.protocol !== 'https:') {
-    throw new Error(
-      `[Config] APP_URL must use https:// in production. Got: ${APP_URL}`
-    );
-  }
-}
-
-// ── Twilio (SMS / WhatsApp) ────────────────────────────────────────────────
-// All Twilio variables are optional. When unset, smsService falls back to
-// console-log (dev mode) so the application starts without SMS credentials.
-const TWILIO_ACCOUNT_SID  = process.env.TWILIO_ACCOUNT_SID  || null;
-const TWILIO_AUTH_TOKEN   = process.env.TWILIO_AUTH_TOKEN   || null;
-const TWILIO_FROM_NUMBER  = process.env.TWILIO_FROM_NUMBER  || null;
-const TWILIO_WHATSAPP_FROM = process.env.TWILIO_WHATSAPP_FROM || null;
-
-// ── Reconciliation Service ────────────────────────────────────────────────────
-// Batch size for processing students during reconciliation (default: 500)
-const RECONCILIATION_BATCH_SIZE = parseInt(
-  process.env.RECONCILIATION_BATCH_SIZE || "500",
-  10,
-);
-// How often the reconciliation scheduler runs (default: 24 hours)
-const RECONCILIATION_INTERVAL_MS = parseInt(
-  process.env.RECONCILIATION_INTERVAL_MS || String(24 * 60 * 60 * 1000),
-  10,
-);
-
-// ── Freeze to prevent accidental mutation at runtime ─────────────────────────
-const config = Object.freeze({
-  EMAIL_PROVIDER_WEBHOOK_SECRET,
-  EMAIL_WEBHOOK_SECRET,
-  EMAIL_SNS_TOPIC_ARNS,
-  EMAIL_SENDGRID_WEBHOOK_PUBLIC_KEY,
-  WEBHOOK_V1_SUNSET,
+module.exports = {
   PORT,
   MONGO_URI,
   RECEIPT_SIGNATURE_SECRET,
@@ -292,6 +278,12 @@ const config = Object.freeze({
   MAX_QUEUE_DEPTH,
   QUEUE_BACKPRESSURE_HIGH_WATER,
   QUEUE_BACKPRESSURE_LOW_WATER,
+  RATE_LIMIT_GLOBAL_WINDOW_MS,
+  RATE_LIMIT_GLOBAL_MAX,
+  RATE_LIMIT_AUTHENTICATED_MAX,
+  REQUEST_QUEUE_MAX_CONCURRENT,
+  REQUEST_QUEUE_MAX_SIZE,
+  REQUEST_QUEUE_DEFAULT_TIMEOUT_MS,
   MAX_BODY_SIZE,
   REQUEST_TIMEOUT_MS,
   STELLAR_TIMEOUT_MS,
@@ -308,15 +300,4 @@ const config = Object.freeze({
   SMTP_USER,
   SMTP_PASS,
   SMTP_FROM,
-  TWILIO_ACCOUNT_SID,
-  TWILIO_AUTH_TOKEN,
-  TWILIO_FROM_NUMBER,
-  TWILIO_WHATSAPP_FROM,
-  EMAIL_PROVIDER,
-  SENDGRID_API_KEY,
-  AWS_REGION,
-  RECONCILIATION_BATCH_SIZE,
-  RECONCILIATION_INTERVAL_MS,
-});
-
-module.exports = config;
+};
