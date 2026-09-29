@@ -4,27 +4,14 @@ import Head from "next/head";
 import "../styles/globals.css";
 import "../styles/redesign.css";
 import Navbar from "../components/Navbar";
-import AppLayout from "../components/AppLayout";
+import RouteShell from "../components/RouteShell";
 import ErrorBoundary from "../components/ErrorBoundary";
 import { AdminAuthProvider } from "../hooks/AdminAuthContext";
 import i18n, { SUPPORTED_LOCALES } from "../i18n";
+import { isAdminRoute } from "../config/routes";
 
 export const ThemeContext = createContext({ dark: false, toggle: () => {} });
 export const useTheme = () => useContext(ThemeContext);
-
-const APP_LAYOUT_ROUTES = [
-  "/dashboard",
-  "/reports",
-  "/fees",
-  "/fee-adjustments",
-  "/audit-logs",
-  "/disputes",
-  "/source-validation-rules",
-  "/audit-logs",
-  "/fee-adjustments",
-  "/fees",
-  "/reports",
-];
 
 export default function MyApp({ Component, pageProps }) {
   const { pathname } = useRouter();
@@ -47,8 +34,6 @@ export default function MyApp({ Component, pageProps }) {
     localStorage.setItem("theme", dark ? "dark" : "light");
   }, [dark]);
 
-  const useAppLayout = APP_LAYOUT_ROUTES.includes(pathname);
-
   return (
     <AdminAuthProvider>
       <ThemeContext.Provider value={{ dark, toggle: () => setDark((d) => !d) }}>
@@ -57,13 +42,10 @@ export default function MyApp({ Component, pageProps }) {
         </Head>
         <Navbar />
         <ErrorBoundary>
-          {useAppLayout ? (
-            <AppLayout>
-              <Component {...pageProps} />
-            </AppLayout>
-          ) : (
+          {/* #1579 — admin guard + layout are applied centrally by route. */}
+          <RouteShell pathname={pathname}>
             <Component {...pageProps} />
-          )}
+          </RouteShell>
         </ErrorBoundary>
       </ThemeContext.Provider>
     </AdminAuthProvider>
@@ -77,10 +59,9 @@ MyApp.getInitialProps = async ({ Component, ctx }) => {
 
   // #1385 — robots.txt only asks crawlers not to fetch these URLs; a page
   // that's still linked from somewhere else can get indexed anyway without
-  // an explicit noindex signal. APP_LAYOUT_ROUTES is exactly the set of
-  // authenticated admin pages (dashboard, audit logs, fee adjustments,
-  // disputes, etc.), so it doubles as the noindex route list.
-  if (ctx.res && APP_LAYOUT_ROUTES.includes(ctx.pathname)) {
+  // an explicit noindex signal. ADMIN_ROUTES (config/routes.js) is exactly
+  // the set of authenticated admin pages, so it doubles as the noindex list.
+  if (ctx.res && isAdminRoute(ctx.pathname)) {
     ctx.res.setHeader("X-Robots-Tag", "noindex");
   }
 

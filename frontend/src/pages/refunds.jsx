@@ -3,7 +3,6 @@ import { getSchoolRefunds, approveRefund } from "../services/api";
 import { getErrorMessage } from "../utils/errorMessages";
 import { IconAlertTriangle, IconCheck, IconChevronLeft, IconChevronRight } from "../components/Icons";
 import PageHero from "../components/PageHero";
-import RequireAdmin from "../components/RequireAdmin";
 import { useTranslation } from "react-i18next";
 
 const STATUS_META = {
@@ -299,7 +298,7 @@ function Refunds() {
   const pendingCount = refunds.filter(r => r.status === "approval_pending").length;
 
   return (
-    <RequireAdmin>
+    <>
       <PageHero
         title={t("refunds.title")}
         subtitle={t("refunds.subtitle")}
@@ -452,7 +451,7 @@ function Refunds() {
           )}
         </>
       )}
-    </RequireAdmin>
+    </>
   );
 }
 

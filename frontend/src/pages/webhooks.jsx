@@ -1,5 +1,4 @@
 import { useState, useEffect } from "react";
-import RequireAdmin from "../components/RequireAdmin";
 import PageHero from "../components/PageHero";
 import ConfirmationModal from "../components/ConfirmationModal";
 import { IconAlertTriangle, IconCheck, IconX, IconPlus, IconRefresh } from "../components/Icons";
@@ -172,7 +171,7 @@ function WebhooksPage() {
   };
 
   return (
-    <RequireAdmin>
+    <>
       <div className="page">
         <PageHero title={t("webhooks.title")} subtitle={t("webhooks.subtitle")} />
 
@@ -385,7 +384,7 @@ function WebhooksPage() {
           gap: 0.5rem;
         }
       `}</style>
-    </RequireAdmin>
+    </>
   );
 }
 

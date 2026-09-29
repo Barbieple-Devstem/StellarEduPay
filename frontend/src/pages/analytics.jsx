@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import PageHero from "../components/PageHero";
-import RequireAdmin from "../components/RequireAdmin";
 import { IconAlertTriangle, IconTrendingUp, IconUsers } from "../components/Icons";
 
 const API_BASE = process.env.REACT_APP_API_BASE || '/api';
@@ -248,4 +247,4 @@ function Analytics() {
   );
 }
 
-export default RequireAdmin(Analytics);
+export default Analytics;

@@ -7,6 +7,11 @@ Disallow: /test-currency
 Disallow: /fee-adjustments
 Disallow: /disputes
 Disallow: /fees
+Disallow: /analytics
+Disallow: /refunds
+Disallow: /webhooks
+Disallow: /source-validation-rules
+Disallow: /mfa-setup
 
 # Allow public pages
 Allow: /

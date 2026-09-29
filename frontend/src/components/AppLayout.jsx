@@ -3,7 +3,6 @@ import Link from "next/link";
 import { useRouter } from "next/router";
 import { useTranslation } from "react-i18next";
 import { useAdminAuthContext } from "../hooks/AdminAuthContext";
-import RequireAdmin from "./RequireAdmin";
 import {
   IconDashboard,
   IconCreditCard,
@@ -86,14 +85,10 @@ function AppLayoutInner({ children }) {
 /**
  * AppLayout
  *
- * Wraps every admin route with the sidebar layout AND the RequireAdmin guard.
- * The guard is applied first so no layout chrome or page content renders until
- * authentication is confirmed.
+ * The sidebar layout for admin routes. The RequireAdmin guard is applied
+ * outside this component by RouteShell (#1579), so no layout chrome renders
+ * until authentication is confirmed.
  */
 export default function AppLayout({ children }) {
-  return (
-    <RequireAdmin>
-      <AppLayoutInner>{children}</AppLayoutInner>
-    </RequireAdmin>
-  );
+  return <AppLayoutInner>{children}</AppLayoutInner>;
 }
