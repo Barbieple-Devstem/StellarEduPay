@@ -18,6 +18,7 @@ export const ADMIN_ROUTES = [
   "/source-validation-rules",
   "/audit-logs",
   "/disputes",
+  "/settings",
   "/mfa-setup",
 ];
 
