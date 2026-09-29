@@ -25,8 +25,28 @@ const DEFAULTS = {
   reminderEnabled: true,
   reminderIntervalMs: 86400000,
   maintenanceMode: false,
-  betaFeatures: [],
 };
+
+const VALIDATORS = {
+  maxSyncBatchSize: (v) => Number.isInteger(v) && v >= 1 && v <= 1000,
+  reminderEnabled: (v) => typeof v === 'boolean',
+  reminderIntervalMs: (v) => Number.isInteger(v) && v >= 60000 && v <= 604800000,
+  maintenanceMode: (v) => typeof v === 'boolean',
+};
+
+function validateSetting(key, value) {
+  if (!SETTING_KEYS.has(key)) {
+    const err = new Error(`Unknown setting key: ${key}`);
+    err.status = 400;
+    throw err;
+  }
+  const validator = VALIDATORS[key];
+  if (validator && !validator(value)) {
+    const err = new Error(`Invalid value for setting: ${key}`);
+    err.status = 400;
+    throw err;
+  }
+}
 
 async function getSchoolSetting(schoolId, key) {
   if (!SETTING_KEYS.has(key)) return undefined;
@@ -46,9 +66,7 @@ async function getSchoolSetting(schoolId, key) {
 }
 
 async function setSchoolSetting(schoolId, key, value) {
-  if (!SETTING_KEYS.has(key)) {
-    throw new Error(`Unknown setting key: ${key}`);
-  }
+  validateSetting(key, value);
   const updated = await School.findOneAndUpdate(
     { schoolId },
     { $set: { [`settings.${key}`]: value } },
@@ -76,7 +94,9 @@ async function getSchoolSettings(schoolId) {
 
 async function clearSchoolSetting(schoolId, key) {
   if (!SETTING_KEYS.has(key)) {
-    throw new Error(`Unknown setting key: ${key}`);
+    const err = new Error(`Unknown setting key: ${key}`);
+    err.status = 400;
+    throw err;
   }
   const updated = await School.findOneAndUpdate(
     { schoolId },
@@ -93,4 +113,6 @@ module.exports = {
   getSchoolSettings,
   clearSchoolSetting,
   SETTING_KEYS,
+  DEFAULTS,
+  validateSetting,
 };
