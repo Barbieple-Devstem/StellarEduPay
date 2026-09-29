@@ -4,9 +4,9 @@
  * Unified configuration loader.
  *
  * Multi-school note: SCHOOL_WALLET_ADDRESS is no longer required at startup.
- * Each school's Stellar address is stored in the School document in MongoDB.
- * The variable is still read here (optional) to support the migration script
- * (scripts/migrate-default-school.js) which seeds the first school from it.
+ * Each school's Stellar address is stored in the school document in MongoDB.
+ * The variable is still read here (optional) for the legacy default-school
+ * backfill migration in backend/migrations/033_backfill_default_school.js.
  */
 
 // ── Required variables ────────────────────────────────────────────────────────

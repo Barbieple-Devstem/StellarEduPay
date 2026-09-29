@@ -42,6 +42,8 @@ const {
   streamPaymentEvents,
   initiatePaymentRefund,
   approvePaymentRefund,
+  rejectPaymentRefund,
+  completePaymentRefund,
   getPaymentRefunds,
   getSchoolRefunds,
   verifyReceipt,
@@ -230,8 +232,10 @@ router.patch("/:txHash/status", requireSchoolAuth(['owner', 'staff']), auditCont
 router.patch("/:txHash/suspicion-review", requireSchoolAuth(['owner', 'staff']), auditContext, reviewSuspiciousPayment);
 router.patch("/:txHash/correct-placeholder", requireSchoolAuth(['owner', 'staff']), auditContext, correctPlaceholderPayment);
 
-router.post("/:txHash/refund", requireSchoolAuth(['owner']), auditContext, initiatePaymentRefund);
-router.post("/refunds/:refundId/approve", requireSchoolAuth(['owner']), auditContext, approvePaymentRefund);
+router.post("/:txHash/refund", requireSchoolAuth(['owner', 'staff']), auditContext, initiatePaymentRefund);
+router.post("/refunds/:refundId/approve", requireSchoolAuth(['owner', 'staff']), auditContext, approvePaymentRefund);
+router.post("/refunds/:refundId/reject", requireSchoolAuth(['owner', 'staff']), auditContext, rejectPaymentRefund);
+router.post("/refunds/:refundId/complete", requireSchoolAuth(['owner', 'staff']), auditContext, completePaymentRefund);
 router.get("/:txHash/refunds", requireSchoolAuth(['owner', 'staff', 'read_only']), getPaymentRefunds);
 router.get("/refunds/school/list", requireSchoolAuth(['owner', 'staff', 'read_only']), getSchoolRefunds);
 

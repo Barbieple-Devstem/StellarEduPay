@@ -27,7 +27,7 @@ RUN npm run build
 FROM node:20-alpine AS runner
 
 # Non-root user for security
-RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+RUN addgroup -S -g 1001 appgroup && adduser -S -u 1001 -G appgroup appuser
 
 WORKDIR /app
 

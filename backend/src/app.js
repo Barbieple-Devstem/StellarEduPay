@@ -49,10 +49,12 @@ const superAdminRoutes = require('./routes/superAdminRoutes');
 const cspReportRoutes = require('./routes/cspReportRoutes');
 const analyticsRoutes = require('./routes/analyticsRoutes');
 const userRoutes = require('./routes/userRoutes');
-const publicConfigRoutes = require('./routes/publicConfigRoutes');
+const academicPeriodRoutes = require('./routes/academicPeriodRoutes');
+const anchorRoutes = require('./routes/anchorRoutes');
 
 const { registerPaymentSavedSubscribers } = require('./services/paymentSavedSubscribers');
 const { startPolling, stopPolling } = require('./services/transactionPollingService');
+const { startStreaming, stopStreaming } = require('./services/horizonStreamingService');
 const retrySelector = require('./services/retryServiceSelector');
 const { startConsistencyScheduler, stopConsistencyScheduler } = require('./services/consistencyScheduler');
 const { startReminderScheduler, stopReminderScheduler } = require('./services/reminderService');
@@ -235,11 +237,28 @@ app.use('/api/webhook-deliveries', webhookDeliveryRoutes);
 app.use('/api/email', emailRoutes);
 app.use('/api/payment-plans', paymentPlanRoutes);
 app.use('/api/audit', auditRoutes);
+// Issue #1575 — alias /api/audit-logs → /api/audit for one release so
+// integrators following the old API spec docs get a 200 with a Deprecation
+// header rather than a hard 404.  Remove this alias in the next major version.
+app.use('/api/audit-logs', (req, res, next) => {
+  res.set('Deprecation', 'true');
+  res.set('Link', '</api/audit>; rel="successor-version"');
+  next();
+}, auditRoutes);
+// Issue #1575 — alias /api/audit-logs → /api/audit for one release so
+// integrators following the old API spec docs get a 200 with a Deprecation
+// header rather than a hard 404.  Remove this alias in the next major version.
+app.use('/api/audit-logs', (req, res, next) => {
+  res.set('Deprecation', 'true');
+  res.set('Link', '</api/audit>; rel="successor-version"');
+  next();
+}, auditRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/superadmin', superAdminRoutes);
 app.use('/api/csp-report', cspReportRoutes);
 app.use('/api', userRoutes);
-app.use('/api/public-config', publicConfigRoutes);
+app.use('/api/academic-periods', academicPeriodRoutes);
+app.use('/api/anchor', anchorRoutes);
 app.get('/api/consistency', requireAdminAuth, runConsistencyCheck);
 app.get('/health', healthCheck);
 app.get('/health/live', healthLive);
@@ -380,6 +399,7 @@ connectDatabase().then(async () => {
 
 // Always-start services (handle concurrency internally)
    startPolling();
+   startStreaming();
    retrySelector.start();
    startTxQueueWorker();
    registerPaymentSavedSubscribers();
