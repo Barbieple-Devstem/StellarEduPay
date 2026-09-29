@@ -32,6 +32,7 @@ const { t } = require('./i18n');
 const email = require('./email');
 const { sendSms, sendWhatsApp, isTwilioConfigured } = require('./smsService');
 const School = require('../models/schoolModel');
+const { formatCryptoAmount, formatWithFiatEquivalent } = require('../utils/formatMoney');
 
 /**
  * Verify the active email provider is reachable/configured.
@@ -47,11 +48,21 @@ async function verifySmtp() {
  * @param {object} opts
  * @param {string} opts.locale        - BCP-47 locale code for email language (e.g. 'en', 'fr')
  * @param {string} opts.timezone      - IANA timezone for deadline formatting (e.g. 'UTC')
+ * @param {string} [opts.assetCode]   - Asset code for amount display, e.g. 'XLM' or 'USDC'
+ * @param {string} [opts.localCurrency] - ISO 4217 fiat currency for fiat equivalent, e.g. 'NGN'
  */
-function buildReminderEmail({ studentName, studentId, className, feeAmount, remainingBalance, schoolName, reminderCount, unsubscribeUrl, escalationLevel, paymentDeadline, logoUrl, primaryColor, address, supportContact, locale, timezone }) {
+async function buildReminderEmail({ studentName, studentId, className, feeAmount, remainingBalance, schoolName, reminderCount, unsubscribeUrl, escalationLevel, paymentDeadline, logoUrl, primaryColor, address, supportContact, locale, timezone, assetCode, localCurrency }) {
   const outstanding = remainingBalance != null ? remainingBalance : feeAmount;
   // Issue #1587: use the school's configured locale for translated labels.
   const resolvedLocale = locale || 'en';
+  const resolvedAsset = assetCode || 'XLM';
+
+  // Issue #1589: format amounts with the asset code and optional fiat equivalent
+  // so parents see "250.00 USDC (≈ ₦390,000 NGN at today's rate)" instead of "250".
+  const [feeAmountFormatted, outstandingFormatted] = await Promise.all([
+    formatWithFiatEquivalent(feeAmount, resolvedAsset, localCurrency || null, resolvedLocale),
+    formatWithFiatEquivalent(outstanding, resolvedAsset, localCurrency || null, resolvedLocale),
+  ]);
 
   // Determine escalation prefix and urgency message
   const ESCALATION_LABELS = {
@@ -81,8 +92,9 @@ function buildReminderEmail({ studentName, studentId, className, feeAmount, rema
     studentName,
     studentId,
     className,
-    feeAmount,
-    outstanding,
+    // Issue #1589: use formatted amounts (with asset code) instead of bare numbers.
+    feeAmount: feeAmountFormatted,
+    outstanding: outstandingFormatted,
     schoolName,
     reminderNote,
     urgency: esc.urgency,
@@ -112,6 +124,7 @@ function buildReminderEmail({ studentName, studentId, className, feeAmount, rema
  * @param {number|null} opts.remainingBalance
  * @param {string} opts.schoolName
  * @param {number} opts.reminderCount
+ * @param {string} [opts.assetCode]         - Asset code, e.g. 'XLM' or 'USDC'
  * @param {number} [opts.escalationLevel=1] - 1=early, 2=approaching, 3=overdue
  * @param {Date|null} [opts.paymentDeadline] - Payment deadline date
  * @returns {Promise<{sent: boolean, messageId?: string, preview?: string, suppressed?: boolean}>}
@@ -138,7 +151,7 @@ async function sendFeeReminder(opts) {
     }
   }
 
-  const { subject, text, html } = buildReminderEmail({
+  const { subject, text, html } = await buildReminderEmail({
     ...opts,
     unsubscribeUrl,
     logoUrl: school?.logoUrl || '',
@@ -150,6 +163,9 @@ async function sendFeeReminder(opts) {
     timezone: school?.timezone || 'UTC',
     // Issue #1588: pass school support contact so the template placeholder is filled.
     supportContact: school?.supportContact || '',
+    // Issue #1589: pass asset code and local currency for formatted amounts.
+    assetCode: opts.assetCode || 'XLM',
+    localCurrency: school?.localCurrency || null,
   });
 
   const result = await email.sendEmail({
@@ -199,9 +215,17 @@ async function sendFeeReminder(opts) {
 
 /**
  * Build an SMS reminder message body.
+ *
+ * Issue #1589: amounts are formatted with the asset code so the recipient
+ * knows whether "250" means XLM or USDC.
  */
-function buildReminderSMS({ studentName, className, feeAmount, remainingBalance, schoolName, reminderCount, escalationLevel, paymentDeadline }) {
+function buildReminderSMS({ studentName, className, feeAmount, remainingBalance, schoolName, reminderCount, escalationLevel, paymentDeadline, assetCode }) {
   const outstanding = remainingBalance != null ? remainingBalance : feeAmount;
+  const resolvedAsset = assetCode || 'XLM';
+
+  // Issue #1589: format amounts with the asset code (no async fiat lookup in SMS
+  // to keep the builder synchronous and side-effect-free).
+  const outstandingFormatted = formatCryptoAmount(outstanding, resolvedAsset, 'en');
 
   const ESCALATION_LABELS = {
     1: { prefix: '', urgency: 'Friendly reminder' },
@@ -214,7 +238,7 @@ function buildReminderSMS({ studentName, className, feeAmount, remainingBalance,
     ? new Date(paymentDeadline).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
     : null;
 
-  let message = `${esc.prefix}${esc.urgency}: ${studentName} (${className}) has unpaid school fees at ${schoolName}. Outstanding: ${outstanding}. `;
+  let message = `${esc.prefix}${esc.urgency}: ${studentName} (${className}) has unpaid school fees at ${schoolName}. Outstanding: ${outstandingFormatted}. `;
   if (deadlineStr) {
     message += `Due: ${deadlineStr}. `;
   }
