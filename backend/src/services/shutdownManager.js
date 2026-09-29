@@ -114,6 +114,10 @@ async function stopAcceptingNewWork() {
       const polling = require('./transactionPollingService');
       if (polling.stopPolling) polling.stopPolling();
     }},
+    { name: 'horizonStreaming', fn: async () => {
+      const streaming = require('./horizonStreamingService');
+      if (streaming.stopStreaming) streaming.stopStreaming();
+    }},
     { name: 'retrySelector', fn: async () => {
       const retrySelector = require('./retryServiceSelector');
       if (retrySelector.stop) retrySelector.stop();

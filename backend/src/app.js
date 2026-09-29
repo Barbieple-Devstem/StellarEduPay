@@ -53,6 +53,7 @@ const academicPeriodRoutes = require('./routes/academicPeriodRoutes');
 
 const { registerPaymentSavedSubscribers } = require('./services/paymentSavedSubscribers');
 const { startPolling, stopPolling } = require('./services/transactionPollingService');
+const { startStreaming, stopStreaming } = require('./services/horizonStreamingService');
 const retrySelector = require('./services/retryServiceSelector');
 const { startConsistencyScheduler, stopConsistencyScheduler } = require('./services/consistencyScheduler');
 const { startReminderScheduler, stopReminderScheduler } = require('./services/reminderService');
@@ -354,6 +355,7 @@ connectDatabase().then(async () => {
 
 // Always-start services (handle concurrency internally)
    startPolling();
+   startStreaming();
    retrySelector.start();
    startTxQueueWorker();
    registerPaymentSavedSubscribers();
