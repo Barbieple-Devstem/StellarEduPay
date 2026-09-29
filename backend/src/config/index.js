@@ -173,6 +173,71 @@ const QUEUE_BACKPRESSURE_HIGH_WATER =
 const QUEUE_BACKPRESSURE_LOW_WATER =
   env.QUEUE_BACKPRESSURE_LOW_WATER ?? Math.floor(MAX_QUEUE_DEPTH * 0.5);
 
+// ── Global Rate Limiting & Request Queue (issue #1597) ────────────────────────
+// The global limiter previously hard-coded 100 req/min per IP, which throttled
+// entire schools sharing a single NAT/CGNAT address. These values are now
+// configurable per environment. Authenticated traffic is keyed by user/school
+// principal (see app.js), so the authenticated limit can be generous while the
+// anonymous limit stays strict.
+const RATE_LIMIT_GLOBAL_WINDOW_MS = parseInt(
+  process.env.RATE_LIMIT_GLOBAL_WINDOW_MS || "60000",
+  10,
+);
+const RATE_LIMIT_GLOBAL_MAX = parseInt(
+  process.env.RATE_LIMIT_GLOBAL_MAX || "100",
+  10,
+);
+// Higher default for authenticated principals (user/school) so a bursar's
+// dashboard and multiple staff behind one IP are not throttled.
+const RATE_LIMIT_AUTHENTICATED_MAX = parseInt(
+  process.env.RATE_LIMIT_AUTHENTICATED_MAX || "600",
+  10,
+);
+
+const REQUEST_QUEUE_MAX_CONCURRENT = parseInt(
+  process.env.REQUEST_QUEUE_MAX_CONCURRENT || "50",
+  10,
+);
+const REQUEST_QUEUE_MAX_SIZE = parseInt(
+  process.env.REQUEST_QUEUE_MAX_SIZE || "1000",
+  10,
+);
+const REQUEST_QUEUE_DEFAULT_TIMEOUT_MS = parseInt(
+  process.env.REQUEST_QUEUE_DEFAULT_TIMEOUT_MS || "30000",
+  10,
+);
+
+if (isNaN(RATE_LIMIT_GLOBAL_WINDOW_MS) || RATE_LIMIT_GLOBAL_WINDOW_MS <= 0) {
+  throw new Error(
+    `[Config] RATE_LIMIT_GLOBAL_WINDOW_MS must be a positive integer, got: ${process.env.RATE_LIMIT_GLOBAL_WINDOW_MS}`,
+  );
+}
+if (isNaN(RATE_LIMIT_GLOBAL_MAX) || RATE_LIMIT_GLOBAL_MAX <= 0) {
+  throw new Error(
+    `[Config] RATE_LIMIT_GLOBAL_MAX must be a positive integer, got: ${process.env.RATE_LIMIT_GLOBAL_MAX}`,
+  );
+}
+if (isNaN(RATE_LIMIT_AUTHENTICATED_MAX) || RATE_LIMIT_AUTHENTICATED_MAX <= 0) {
+  throw new Error(
+    `[Config] RATE_LIMIT_AUTHENTICATED_MAX must be a positive integer, got: ${process.env.RATE_LIMIT_AUTHENTICATED_MAX}`,
+  );
+}
+if (isNaN(REQUEST_QUEUE_MAX_CONCURRENT) || REQUEST_QUEUE_MAX_CONCURRENT <= 0) {
+  throw new Error(
+    `[Config] REQUEST_QUEUE_MAX_CONCURRENT must be a positive integer, got: ${process.env.REQUEST_QUEUE_MAX_CONCURRENT}`,
+  );
+}
+if (isNaN(REQUEST_QUEUE_MAX_SIZE) || REQUEST_QUEUE_MAX_SIZE < 0) {
+  throw new Error(
+    `[Config] REQUEST_QUEUE_MAX_SIZE must be a non-negative integer, got: ${process.env.REQUEST_QUEUE_MAX_SIZE}`,
+  );
+}
+if (isNaN(REQUEST_QUEUE_DEFAULT_TIMEOUT_MS) || REQUEST_QUEUE_DEFAULT_TIMEOUT_MS <= 0) {
+  throw new Error(
+    `[Config] REQUEST_QUEUE_DEFAULT_TIMEOUT_MS must be a positive integer, got: ${process.env.REQUEST_QUEUE_DEFAULT_TIMEOUT_MS}`,
+  );
+}
+
 // ── Body Size Limit ───────────────────────────────────────────────────────────
 // Global JSON body size limit (default: 10kb). Bulk import uses 1mb regardless.
 const MAX_BODY_SIZE = env.MAX_BODY_SIZE;
@@ -237,6 +302,12 @@ module.exports = {
   MAX_QUEUE_DEPTH,
   QUEUE_BACKPRESSURE_HIGH_WATER,
   QUEUE_BACKPRESSURE_LOW_WATER,
+  RATE_LIMIT_GLOBAL_WINDOW_MS,
+  RATE_LIMIT_GLOBAL_MAX,
+  RATE_LIMIT_AUTHENTICATED_MAX,
+  REQUEST_QUEUE_MAX_CONCURRENT,
+  REQUEST_QUEUE_MAX_SIZE,
+  REQUEST_QUEUE_DEFAULT_TIMEOUT_MS,
   MAX_BODY_SIZE,
   REQUEST_TIMEOUT_MS,
   STELLAR_TIMEOUT_MS,
