@@ -9,6 +9,8 @@ const SETTING_KEYS = new Set([
   'reminderEnabled',
   'reminderIntervalMs',
   'maintenanceMode',
+  'betaFeatures',
+  'acceptedAnchors',       // SEP-24 anchor list for bank/mobile-money payments (#1571)
 ]);
 
 const SYSTEM_CONFIG_MAP = {
