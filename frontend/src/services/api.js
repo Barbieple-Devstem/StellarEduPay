@@ -178,7 +178,9 @@ export const bulkImportStudents = (file) => {
   // boundary the backend's streaming CSV parser needs.
   return api.post("/students/bulk", form);
 };
-export const getStudentsExportUrl = (params = {}) => apiUrl("/students/export", params);
+// Through axios (not a bare link) so the X-School-ID header and auth refresh apply.
+export const exportStudents = (params = {}) =>
+  api.get("/students/export", { params, responseType: "blob" });
 export const getStudentFeeHistory = (studentId, params = {}) =>
   api.get(`/students/${encodeURIComponent(studentId)}/fee-history`, { params });
 export const resetStudentPayment = (studentId, data = {}) =>

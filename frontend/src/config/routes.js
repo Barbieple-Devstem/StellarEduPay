@@ -7,6 +7,7 @@
 // Every authenticated admin page. Logged-out visitors are redirected to /login.
 export const ADMIN_ROUTES = [
   "/dashboard",
+  "/students",
   "/reports",
   "/fees",
   "/fee-adjustments",

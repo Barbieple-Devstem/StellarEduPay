@@ -12,6 +12,7 @@ Disallow: /refunds
 Disallow: /webhooks
 Disallow: /source-validation-rules
 Disallow: /mfa-setup
+Disallow: /students
 
 # Allow public pages
 Allow: /
