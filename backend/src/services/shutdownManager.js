@@ -96,6 +96,10 @@ async function closeQueues() {
       const retryQueue = require('../services/bullMQRetryService');
       if (retryQueue.shutdownQueue) await retryQueue.shutdownQueue();
     }},
+    { name: 'reportQueue', fn: async () => {
+      const reportQueue = require('../queue/reportQueue');
+      if (reportQueue.closeQueue) await reportQueue.closeQueue();
+    }},
   ];
 
   for (const op of closeOps) {
