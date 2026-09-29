@@ -3,8 +3,12 @@ import { createRefreshHandler } from "./authRefresh";
 
 const TIMEOUT_MS = parseInt(process.env.NEXT_PUBLIC_REQUEST_TIMEOUT_MS || "15000", 10);
 
+// Issue #1583: Default to a relative base URL so the same frontend build works
+// for any deployment. The Next.js /api/* proxy rewrite (next.config.js) forwards
+// same-origin /api/* requests to the backend, keeping auth cookies first-party.
+// An explicit NEXT_PUBLIC_API_URL can still be set for split-origin dev setups.
 const api = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api",
+  baseURL: process.env.NEXT_PUBLIC_API_URL || "/api",
   timeout: TIMEOUT_MS,
   withCredentials: true,
 });
@@ -98,7 +102,9 @@ export const deleteFeeStructure = (className) => api.delete(`/fees/${encodeURICo
 // Reports
 export const getReport = (params = {}) => api.get("/reports", { params });
 export const getReportCsvUrl = (params = {}) => {
-  const base = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api";
+  // Use relative path by default so the URL stays on the same origin. An
+  // explicit NEXT_PUBLIC_API_URL can override for split-origin deployments.
+  const base = process.env.NEXT_PUBLIC_API_URL || "/api";
   const query = new URLSearchParams({ ...params, format: "csv" }).toString();
   return `${base}/reports?${query}`;
 };
