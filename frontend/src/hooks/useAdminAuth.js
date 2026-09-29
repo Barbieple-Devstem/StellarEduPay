@@ -50,6 +50,8 @@ export function useAdminAuth() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [schoolId, setSchoolId] = useState(null);
   const [userId, setUserId] = useState(null);
+  // #1581 — roles from /auth/me drive role-based UI permissions (utils/permissions.js).
+  const [roles, setRoles] = useState([]);
   const [checked, setChecked] = useState(false);
   // #1218 — surfaces a recoverable auth-me failure so consuming pages can
   // render a "Retry" affordance instead of silently breaking.
@@ -71,6 +73,7 @@ export function useAdminAuth() {
     setIsAdmin(true);
     setSchoolId(data.schoolId || null);
     setUserId(data.userId || null);
+    setRoles(Array.isArray(data.roles) ? data.roles : []);
     setAuthMeError(false);
     if (typeof window !== 'undefined') {
       if (data.schoolId) localStorage.setItem('schoolId', data.schoolId);
@@ -90,6 +93,7 @@ export function useAdminAuth() {
         setIsAdmin(false);
         setSchoolId(null);
         setUserId(null);
+        setRoles([]);
       })
       .finally(() => {
         if (mountedRef.current) setChecked(true);
@@ -141,6 +145,7 @@ export function useAdminAuth() {
     setIsAdmin(false);
     setSchoolId(null);
     setUserId(null);
+    setRoles([]);
     setAuthMeError(false);
     // Clear school context from storage
     if (typeof window !== 'undefined') {
@@ -150,5 +155,5 @@ export function useAdminAuth() {
     router.push('/login');
   }, [router]);
 
-  return { isAdmin, checked, login, logout, schoolId, userId, authMeError, retryAuth };
+  return { isAdmin, checked, login, logout, schoolId, userId, roles, authMeError, retryAuth };
 }

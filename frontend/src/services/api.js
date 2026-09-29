@@ -163,3 +163,58 @@ export const updateInstallment = (studentId, installmentIndex, data) =>
   api.patch(`/payment-plans/${studentId}/installment/${installmentIndex}`, data);
 export const cancelPaymentPlan = (studentId) =>
   api.delete(`/payment-plans/${studentId}`);
+
+// ── #1581 admin screens ───────────────────────────────────────────────────────
+
+// Students
+export const deleteStudent = (studentId, data = {}) =>
+  api.delete(`/students/${encodeURIComponent(studentId)}`, { data });
+export const restoreStudent = (studentId) =>
+  api.post(`/students/${encodeURIComponent(studentId)}/restore`);
+export const bulkImportStudents = (file) => {
+  const form = new FormData();
+  form.append("file", file);
+  // No explicit Content-Type: the browser sets multipart/form-data with the
+  // boundary the backend's streaming CSV parser needs.
+  return api.post("/students/bulk", form);
+};
+export const getStudentsExportUrl = (params = {}) => apiUrl("/students/export", params);
+export const getStudentFeeHistory = (studentId, params = {}) =>
+  api.get(`/students/${encodeURIComponent(studentId)}/fee-history`, { params });
+export const resetStudentPayment = (studentId, data = {}) =>
+  api.post(`/students/${encodeURIComponent(studentId)}/reset-payment`, data);
+export const reconcileStudent = (studentId) =>
+  api.post(`/students/${encodeURIComponent(studentId)}/reconcile`);
+export const getOverdueStudents = () => api.get("/students/overdue");
+
+// Payments
+export const getPayments = (params = {}, { signal } = {}) => api.get("/payments", { params, signal });
+export const getSuspiciousPayments = (params = {}) => api.get("/payments/suspicious", { params });
+export const getPendingPayments = (params = {}) => api.get("/payments/pending", { params });
+export const getStuckPayments = () => api.get("/payments/stuck");
+export const getOverpayments = (params = {}) => api.get("/payments/overpayments", { params });
+export const reviewSuspiciousPayment = (txHash, data) =>
+  api.patch(`/payments/${encodeURIComponent(txHash)}/suspicion-review`, data);
+export const updatePaymentStatus = (txHash, data) =>
+  api.patch(`/payments/${encodeURIComponent(txHash)}/status`, data);
+export const correctPlaceholderPayment = (txHash, data) =>
+  api.patch(`/payments/${encodeURIComponent(txHash)}/correct-placeholder`, data);
+
+// School settings (key/value runtime settings)
+export const getSchoolById = (schoolId) => api.get(`/schools/${encodeURIComponent(schoolId)}`);
+export const updateSchoolById = (schoolId, data) => api.patch(`/schools/${encodeURIComponent(schoolId)}`, data);
+export const getSchoolSettings = (schoolId) => api.get(`/schools/${encodeURIComponent(schoolId)}/settings`);
+export const updateSchoolSettings = (schoolId, data) =>
+  api.patch(`/schools/${encodeURIComponent(schoolId)}/settings`, data);
+export const getPaymentLimits = () => api.get("/payments/limits");
+export const getAcceptedAssets = () => api.get("/payments/accepted-assets");
+
+// Security — sessions
+export const listSessions = () => api.get("/auth/sessions");
+export const revokeSession = (sessionId) => api.delete(`/auth/sessions/${encodeURIComponent(sessionId)}`);
+
+// Reminders
+export const previewReminders = () => api.get("/reminders/preview");
+export const triggerReminders = () => api.post("/reminders/trigger");
+export const setReminderOptOut = (studentId, optOut) =>
+  api.post("/reminders/opt-out", { studentId, optOut });
